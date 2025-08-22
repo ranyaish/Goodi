@@ -1,152 +1,184 @@
 // scrape-goddi.js
-// ===============================
-// רץ ב-GitHub Actions: מושך את נתוני Goodi ומכניס ל-Supabase
-// עכשיו כולל כתיבת לוג ל- import_logs (כמה רשומות נכתבו ומה הסטטוס)
-
+import fs from "fs";
+import path from "path";
 import { chromium } from "playwright";
-import { createClient } from "@supabase/supabase-js";
 
-const GOODI_USER = process.env.GOODI_USER;
-const GOODI_PASS = process.env.GOODI_PASS;
-const SB_URL       = process.env.SB_URL;
-const SB_SERVICE   = process.env.SB_SERVICE_KEY;
+const GOODI_URL = process.env.GOODI_URL || "https://goodi.co.il/Restaurant/";
+const USER = process.env.GOODI_USER;
+const PASS = process.env.GOODI_PASS;
 
-if (!GOODI_USER || !GOODI_PASS || !SB_URL || !SB_SERVICE) {
-  console.error("Missing required env vars: GOODI_USER / GOODI_PASS / SB_URL / SB_SERVICE_KEY");
+const SB_URL = process.env.SB_URL;
+const SB_SERVICE_KEY = process.env.SB_SERVICE_KEY;
+
+if (!USER || !PASS || !SB_URL || !SB_SERVICE_KEY) {
+  console.error("Missing required env vars. Need GOODI_USER, GOODI_PASS, SB_URL, SB_SERVICE_KEY");
   process.exit(1);
 }
 
-const supabase = createClient(SB_URL, SB_SERVICE, {
-  auth: { persistSession: false },
-});
+// ---------- helpers ----------
+const ART_DIR = path.join(process.cwd(), "artifacts");
+fs.mkdirSync(ART_DIR, { recursive: true });
 
-// helper: הכנסה למאגר עם מניעת כפילות (כמו אצלך: ייחוד לפי date+name)
-async function upsertCoupons(rows) {
-  let written = 0;
-
-  // נחלק לבאצ'ים כדי להיות עדינים
-  const chunk = 500;
-  for (let i = 0; i < rows.length; i += chunk) {
-    const part = rows.slice(i, i + chunk);
-    const { data, error, count } = await supabase
-      .from("coupons")
-      .upsert(part, { onConflict: "date,name", ignoreDuplicates: true, count: "estimated" });
-
-    if (error) throw error;
-
-    // אם ignoreDuplicates: true, הנתונים שלא הוכנסו לא ייספרו,
-    // אז נספור ידנית לפי כמה רשומות חזרו/עברו.
-    // רוב הזמן data יהיה null כשcount='estimated', אז נסכם לפי part.
-    written += (data?.length ?? 0) || part.length;
+async function saveArtifacts(page, label) {
+  try {
+    await page.screenshot({ path: path.join(ART_DIR, `${label}.png`), fullPage: true });
+    const html = await page.content();
+    fs.writeFileSync(path.join(ART_DIR, `${label}.html`), html, "utf8");
+  } catch (e) {
+    console.warn("Failed to save artifacts:", e.message);
   }
-
-  return written;
 }
 
+function ddmmyyyy(date) {
+  const d = String(date.getDate()).padStart(2, "0");
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const y = String(date.getFullYear());
+  return `${d}/${m}/${y}`;
+}
+
+// חיפוש שדה בעמוד או בכל הפריימים
+async function findInFrames(page, selectorCandidates, timeout = 45000) {
+  const deadline = Date.now() + timeout;
+  const frames = () => [page.mainFrame(), ...page.frames()];
+
+  while (Date.now() < deadline) {
+    for (const f of frames()) {
+      for (const sel of selectorCandidates) {
+        const el = await f.$(sel).catch(() => null);
+        if (el) return { frame: f, handle: el, selector: sel };
+      }
+    }
+    await page.waitForTimeout(300); // פולינג קצר
+  }
+  return null;
+}
+
+// ---------- main ----------
 (async () => {
-  let insertedCount = 0;
+  const browser = await chromium.launch({ headless: true });
+  const ctx = await browser.newContext({
+    viewport: { width: 1280, height: 900 },
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36",
+    locale: "he-IL",
+    timezoneId: "Asia/Jerusalem",
+  });
+  const page = await ctx.newPage();
 
   try {
-    const browser = await chromium.launch({ headless: true });
-    const page = await browser.newPage();
+    console.log("Navigating to:", GOODI_URL);
+    await page.goto(GOODI_URL, { waitUntil: "domcontentloaded", timeout: 90000 });
+    await page.waitForLoadState("networkidle", { timeout: 90000 });
 
-    // === 1) התחברות ל-Goodi (מסך לוגין) ===
-    await page.goto("https://goodi.co.il/Restaurant"); // כתובת בסיסית; תתאים ליעד שלך אם יש דף ספציפי
-    // מלא שדות כניסה (עדכן סלקטורים אם צריך):
-    await page.fill('input[name="userName"]', GOODI_USER);
-    await page.fill('input[name="password"]', GOODI_PASS);
-    await page.click('input[type="submit"], button[type="submit"]');
+    // נסה למצוא שדות התחברות בכל הפריימים
+    const userSelectors = [
+      'input[name="userName"]',
+      'input[name="username"]',
+      'input[id*="user"]',
+      'input[placeholder*="משתמש"]',
+      'input[type="text"]'
+    ];
+    const passSelectors = [
+      'input[name="password"]',
+      'input[id*="pass"]',
+      'input[placeholder*="סיסמא"]',
+      'input[type="password"]'
+    ];
+    const loginBtnSelectors = [
+      'input[type="submit"]',
+      'button[type="submit"]',
+      'button:has-text("כניסה")',
+      'input[value*="כניסה"]'
+    ];
 
-    // המתנה לניווט / לדף הדוחות
-    await page.waitForLoadState("networkidle");
-
-    // === 2) ניווט לדוח היומי (או לדף שמציג נתונים עדכניים) ===
-    // אם יש לשוניות/פילטרים – בחר טווח ימים/דוח "היום".
-    // דוגמה כללית; החלף לסלקטורים שלך אם צריך:
-    // await page.click('text=דוחות');
-    // await page.selectOption('select[name="range"]', 'today');
-
-    // === 3) חילוץ שורות הטבלה ===
-    // נתאים לסלקטור של הטבלה בדף.
-    // חשוב: החילוץ יחזיר מערך אובייקטים [{date,name,amount}, ...]
-    const rows = await page.$$eval("table tr", (trs) => {
-      const out = [];
-      // מצא כותרות
-      let headers = [];
-      for (const tr of trs) {
-        const cells = Array.from(tr.querySelectorAll("th,td")).map((td) =>
-          td.innerText.replace(/\s+/g, " ").trim()
-        );
-        if (!cells.length) continue;
-
-        if (!headers.length && tr.querySelector("th")) {
-          headers = cells.map((h) => h.toLowerCase());
-          continue;
-        }
-
-        if (headers.length && tr.querySelectorAll("td").length === headers.length) {
-          const obj = {};
-          headers.forEach((h, i) => (obj[h] = cells[i]));
-
-          // מיפוי לשדות שלנו: "תאריך", "שם עובד", "תשלום"
-          const rawDate = obj["תאריך"] || obj["date"];
-          const rawName = obj["שם עובד"] || obj["שם לקוח"] || obj["name"];
-          const rawAmt  = obj["תשלום"] || obj["amount"];
-
-          if (!rawDate || !rawName || !rawAmt) return;
-
-          // נרמול תאריך ל-YYYY-MM-DD
-          // קלט עשוי להיות dd/mm/yyyy
-          const m = rawDate.match(/^(\d{2})[./-](\d{2})[./-](\d{4})/);
-          let isoDate = rawDate;
-          if (m) isoDate = `${m[3]}-${m[2]}-${m[1]}`;
-
-          // ניקוי סימני ₪ ופסיקים
-          const amt = Number(String(rawAmt).replace(/[^\d.]/g, "") || 0);
-          if (!isoDate || !rawName || !amt) return;
-
-          out.push({
-            date: isoDate,
-            name: rawName,
-            amount: amt,
-            redeemed: false,
-            source_label: "goodi-daily",
-          });
-        }
-      }
-      return out;
-    });
-
-    await browser.close();
-
-    if (!rows.length) {
-      // בלי רשומות – עדיין נכתוב לוג (success עם 0)
-      await supabase.from("import_logs").insert([{ records_imported: 0, status: "success" }]);
-      console.log("No rows found to import.");
-      process.exit(0);
+    // חפש שדה משתמש
+    const userField = await findInFrames(page, userSelectors, 60000);
+    if (!userField) {
+      console.error("Could not locate username field in any frame.");
+      await saveArtifacts(page, "no-username-field");
+      throw new Error("username field not found");
+    }
+    const passField = await findInFrames(page, passSelectors, 20000);
+    if (!passField) {
+      console.error("Could not locate password field in any frame.");
+      await saveArtifacts(page, "no-password-field");
+      throw new Error("password field not found");
     }
 
-    // === 4) כתיבה ל-Supabase (with ignoreDuplicates) ===
-    insertedCount = await upsertCoupons(rows);
+    // מלא פרטים
+    console.log("Filling credentials…");
+    await userField.handle.fill(USER, { timeout: 30000 });
+    await passField.handle.fill(PASS, { timeout: 30000 });
 
-    // === 5) כתיבת לוג ל-import_logs ===
-    await supabase
-      .from("import_logs")
-      .insert([{ records_imported: insertedCount, status: "success" }]);
+    // כפתור כניסה
+    const loginBtn = await findInFrames(page, loginBtnSelectors, 20000);
+    if (loginBtn) {
+      await loginBtn.handle.click();
+    } else {
+      // אם אין כפתור — ננסה Enter על הסיסמה
+      await passField.handle.press("Enter");
+    }
 
-    console.log(`Imported ${insertedCount} rows (deduped).`);
+    // המתן לניווט אחרי התחברות (או שינוי URL/פריים)
+    await Promise.race([
+      page.waitForLoadState("networkidle", { timeout: 90000 }),
+      page.waitForURL(/Restaurant|Reports|Orders|Dashboard/i, { timeout: 90000 }).catch(() => {})
+    ]);
+
+    // נקודת הוכחה – שמור צילום מסך אחרי לוגין
+    await saveArtifacts(page, "after-login");
+
+    // === דוגמה לקריאת נתוני היום מהדף ===
+    // אם יש טבלה בדוח היומי — משוך אותה.
+    // כדי שלא ננחש סלקטור ספציפי, ניקח את כל ה־rows מכל הפריימים וננסה לנרמל.
+    let rows = [];
+    for (const f of [page.mainFrame(), ...page.frames()]) {
+      const trs = await f.$$eval("table tr", trs =>
+        trs.map(tr => Array.from(tr.cells).map(td => td.innerText.trim()))
+      ).catch(() => []);
+      if (trs && trs.length) rows.push(...trs);
+    }
+    console.log("Found rows:", rows.length);
+
+    // סינון גס לכותרות/שורות ריקות
+    rows = rows.filter(r => r && r.length >= 3);
+
+    // נסה למפות לעמודות: [תשלום, שם עובד, תאריך]
+    // תאריך בפורמט dd/mm/yyyy
+    const today = new Date();
+    const todayStr1 = ddmmyyyy(today);               // 22/08/2025
+    const todayStr2 = ddmmyyyy(new Date(today));     // אותו דבר, לשמירה
+
+    const candidates = [];
+    for (const r of rows) {
+      const joined = r.join(" ");
+      // תשלום – נחפש ₪ או מספר עם נקודה/פסיק
+      const amountMatch = joined.match(/₪?\s?(\d+(?:[.,]\d{1,2})?)/);
+      const dateMatch = joined.match(/(\d{2}\/\d{2}\/\d{4})/);
+      if (amountMatch && dateMatch) {
+        // שם עובד: ניקח את הטקסט בין הסכום לתאריך או עמודה אמצעית נפוצה
+        let employee = r[1] || r[0];
+        const amount = amountMatch[1].replace(",", ".");
+        const date = dateMatch[1];
+
+        candidates.push({ date, employee, amount });
+      }
+    }
+
+    console.log("Parsed rows (first 5):", candidates.slice(0, 5));
+
+    // כאן במקום console.log היינו דוחפים ל-Supabase כמו בקוד הקודם שלך…
+    // נשמור artifact JSON כדי לבדוק את הפורמט לפני שמכניסים ל-DB.
+    fs.writeFileSync(path.join(ART_DIR, "parsed.json"), JSON.stringify(candidates, null, 2), "utf8");
+
+    console.log("Scrape finished OK, parsed:", candidates.length);
     process.exit(0);
   } catch (err) {
-    console.error("Scrape error:", err);
-
-    // לוג כישלון
-    try {
-      await supabase
-        .from("import_logs")
-        .insert([{ records_imported: 0, status: "error: " + (err?.message || String(err)) }]);
-    } catch (e2) {
-      console.error("Failed to write import log:", e2);
-    }
+    console.error("Scrape error:", err?.message || err);
+    await saveArtifacts(page, "on-error");
     process.exit(1);
+  } finally {
+    await ctx.close();
+    await browser.close();
   }
 })();
