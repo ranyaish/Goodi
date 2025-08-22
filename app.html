@@ -30,7 +30,7 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Heebo,Arial}
 header{position:sticky;top:0;background:#ffffffcc;backdrop-filter:blur(8px);
-  padding:12px 16px;border-bottom:1px solid var(--line)}
+  padding:12px 16px;border-bottom:1px solid var(--line);z-index:10}
 .container{max-width:860px;margin:20px auto;padding:0 16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
 label{display:block;color:var(--muted);font-size:14px;margin-bottom:6px}
@@ -55,6 +55,12 @@ thead th{position:sticky;top:64px;background:#fff}
 .list{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:10px}
 .list button{display:block;width:100%;text-align:right;border:0;border-bottom:1px solid var(--line);background:#fff;padding:10px}
 .list button:last-child{border-bottom:0}
+
+/* מסך כניסה בסיסי */
+#gate{
+  position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:10000;
+}
+#gate .card{width:min(420px,92%);}
 </style>
 </head>
 <body>
@@ -62,9 +68,24 @@ thead th{position:sticky;top:64px;background:#fff}
   <div class="container"><b>גודי שוברים - מערכת ניהול</b></div>
 </header>
 
-<div class="container">
+<!-- === GATE (נעילת כניסה בסיסית) === -->
+<div id="gate">
+  <div class="card">
+    <h3 style="margin:0 0 6px 0">כניסה</h3>
+    <div class="row">
+      <div class="col"><label>שם משתמש</label><input id="gateUser" autocomplete="username" placeholder=""/></div>
+      <div class="col"><label>סיסמא</label><input id="gatePass" type="password" autocomplete="current-password" placeholder=""/></div>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div class="col" style="flex:0 0 180px"><button id="gateBtn" class="primary">היכנס</button></div>
+      <div class="col"><div id="gateMsg" class="hint"></div></div>
+    </div>
+  </div>
+</div>
 
-  <!-- פס פעולה ראשי: בחירת לקוח (שדות Supabase מוסתרים; חיבור אוטומטי) -->
+<div class="container" id="app" style="display:none">
+
+  <!-- פס פעולה ראשי: בחירת לקוח -->
   <div class="card">
     <div class="row" style="align-items:end">
       <div class="col">
@@ -81,7 +102,7 @@ thead th{position:sticky;top:64px;background:#fff}
     <div id="connStatus" class="hint" style="margin-top:8px">מחבר…</div>
   </div>
 
-  <!-- פרטי לקוח (רק רשימת שוברים, ללא סכומי על) -->
+  <!-- פרטי לקוח -->
   <div class="card" id="custCard" style="display:none">
     <div class="row">
       <div class="col"><b id="custTitle">לקוח</b></div>
@@ -110,17 +131,44 @@ thead th{position:sticky;top:64px;background:#fff}
 </div>
 
 <script>
+/* ===== הגדרות כניסה בסיסיות =====
+   שנה כאן את המשתמש/סיסמה איך שבא לך.
+   הערה: זו לא אבטחה חזקה (הכל בצד-לקוח). לפתרון אמיתי – עדיף לארח ב-Vercel/Netlify/Cloudflare Access.
+*/
+const BASIC_USER = "admin";
+const BASIC_PASS = "1234";
+
 /* ===== Utils ===== */
 const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
 function fmtILS(n){ return new Intl.NumberFormat('he-IL',{style:'currency',currency:'ILS'}).format(Number(n||0)); }
 function safeMsg(e){return (e&&(e.message||e.statusText||e.name))||String(e||'Unknown');}
 function isoToDDMMYYYY(iso){ if(!iso) return ''; const [y,m,d]=String(iso).split('-'); if(!y||!m||!d) return iso; return `${d.padStart(2,'0')}/${m.padStart(2,'0')}/${y}`; }
 
-/* ===== Supabase (מוסתר – טעינה אוטומטית) ===== */
+/* ===== Supabase (מוסתר – חיבור אוטומטי) ===== */
 const DEFAULT_URL="https://ylqpxwgchwalcblfipsu.supabase.co";
 const DEFAULT_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM";
 let supabase=null, customersCache=[], customersLoaded=false;
 
+/* ===== GATE ===== */
+function gateOk(){
+  return localStorage.getItem('app_gate_ok')==='1';
+}
+function showApp(){
+  $('#gate').style.display='none';
+  $('#app').style.display='block';
+}
+$('#gateBtn').addEventListener('click', ()=>{
+  const u=$('#gateUser').value.trim(), p=$('#gatePass').value;
+  if(u===BASIC_USER && p===BASIC_PASS){
+    localStorage.setItem('app_gate_ok','1');
+    showApp(); if(window._readyAfterGate) window._readyAfterGate();
+  }else{
+    $('#gateMsg').textContent='שם משתמש/סיסמא שגויים';
+  }
+});
+if(gateOk()) showApp();
+
+/* ===== אתחול אפליקציה ===== */
 async function init(){
   try{
     if(!window.supabase){ $('#connStatus').textContent='ספריית Supabase לא נטענה'; return; }
@@ -135,13 +183,15 @@ async function init(){
     $('#connStatus').textContent='שגיאת חיבור: '+safeMsg(e);
   }
 }
-document.addEventListener('supabase-ready', init);
+document.addEventListener('supabase-ready', ()=>{
+  // אם עברו Gate – נטען; אם לא, נזכור לרוץ אחרי ההתחברות
+  if(gateOk()) init(); else window._readyAfterGate = init;
+});
 
 /* ===== מודאל בחירת לקוח ===== */
 function openModal(){
-  // אם עוד לא נטען — נטען עכשיו ואז נפתח
-  if(!customersLoaded){ loadCustomers(true).then(()=>{ openModalNow(); }); }
-  else { openModalNow(); }
+  if(!customersLoaded){ loadCustomers(true).then(openModalNow); }
+  else openModalNow();
 }
 function openModalNow(){
   $('#modalPick').style.display='flex';
@@ -150,10 +200,10 @@ function openModalNow(){
   renderList(customersCache);
 }
 function closeModal(){ $('#modalPick').style.display='none'; }
+
 $('#btnPick').addEventListener('click', openModal);
 $('#btnCloseModal').addEventListener('click', closeModal);
 $('#btnClose').addEventListener('click', ()=>{ $('#custCard').style.display='none'; $('#currentCustomer').value='לא נבחר'; });
-
 $('#btnReload').addEventListener('click', ()=> loadCustomers(true));
 
 $('#searchInput').addEventListener('input', ()=>{
@@ -162,7 +212,7 @@ $('#searchInput').addEventListener('input', ()=>{
   renderList(list);
 });
 
-// האזנת קליקים עם האצלת אירועים כדי לתפוס גם כפתורים שנוצרו דינאמית
+// האצלת אירועים – תופס כפתורים שנוצרים דינמית
 $('#listWrap').addEventListener('click', (ev)=>{
   const btn = ev.target.closest('button[data-id]');
   if(!btn) return;
@@ -179,7 +229,7 @@ function renderList(list){
   el.innerHTML = list.map(c=>`<button type="button" data-id="${c.customer_id}" data-name="${c.name}">${c.name}</button>`).join('');
 }
 
-/* ===== נתוני לקוחות ===== */
+/* ===== טעינת לקוחות ===== */
 async function loadCustomers(showCount=false){
   try{
     $('#connStatus').textContent='טוען לקוחות…';
@@ -193,7 +243,7 @@ async function loadCustomers(showCount=false){
   }
 }
 
-/* ===== פרטי לקוח (רשימת שוברים בלבד) ===== */
+/* ===== כרטיס לקוח ===== */
 async function openCustomer(customerId, name){
   try{
     const displayName = name || (await supabase.from('customers').select('name').eq('customer_id',customerId).single()).data?.name || 'לקוח';
@@ -219,16 +269,15 @@ async function openCustomer(customerId, name){
 
     $('#couponTable').innerHTML=html;
     $('#custCard').style.display='block';
-
-    // האזנה באמצעות האצלת אירועים (לטובת רענון עתידי)
-    $('#couponTable').addEventListener('click', (ev)=>{
-      const b = ev.target.closest('.btnToggle');
-      if(!b) return;
-      toggleRedeemed(parseInt(b.dataset.id,10), b.dataset.state==='1', b.dataset.cid);
-    }, { once:false });
-
   }catch(e){ alert('שגיאה: '+safeMsg(e)); }
 }
+
+// האזנה לכפתורי מימוש/ביטול (האצלת אירועים)
+document.addEventListener('click', (ev)=>{
+  const b = ev.target.closest('.btnToggle');
+  if(!b) return;
+  toggleRedeemed(parseInt(b.dataset.id,10), b.dataset.state==='1', b.dataset.cid);
+});
 
 /* ===== סימון/ביטול מימוש (ביטול עם שם בעברית) ===== */
 async function toggleRedeemed(couponId, currentlyRedeemed, customerId){
@@ -237,14 +286,12 @@ async function toggleRedeemed(couponId, currentlyRedeemed, customerId){
       const name = prompt('בטוח לבטל מימוש?\nהכנס/י שם מבטל (בעברית):');
       if(!name) return;
       if(!/[\u0590-\u05FF]/.test(name)){ alert('נא להזין שם בעברית.'); return; }
-      // אפשר להוסיף לוג אירועים אם תרצה
     }
     const patch = currentlyRedeemed
       ? { redeemed:false, redeemed_at:null }
       : { redeemed:true,  redeemed_at:new Date().toISOString() };
     const { error } = await supabase.from('coupons').update(patch).eq('id', couponId);
     if(error){ alert('שגיאת עדכון: '+safeMsg(error)); return; }
-
     // רענון כרטיס
     const cust = customersCache.find(c=> String(c.customer_id)===String(customerId));
     openCustomer(customerId, cust?.name);
