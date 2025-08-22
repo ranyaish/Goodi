@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>ייבוא שוברים מ־HTML → Supabase (מיפוי אוטומטי)</title>
+<title>ייבוא שוברים מ־HTML → Supabase</title>
 
-<!-- טעינת supabase-js עם Fallback -->
+<!-- supabase-js עם Fallback -->
 <script>
 (function loadSupabase(){
   const urls=[
@@ -13,55 +13,53 @@
     "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js",
     "https://cdnjs.cloudflare.com/ajax/libs/supabase-js/2.45.4/supabase.min.js"
   ];
-  (function tryNext(i){
+  (function go(i){
     if(i>=urls.length){document.dispatchEvent(new Event("supabase-ready"));return;}
     const s=document.createElement("script"); s.src=urls[i]; s.async=true;
     s.onload=()=>document.dispatchEvent(new Event("supabase-ready"));
-    s.onerror=()=>tryNext(i+1);
-    document.head.appendChild(s);
+    s.onerror=()=>go(i+1); document.head.appendChild(s);
   })(0);
 })();
 </script>
 
 <style>
-:root{--bg:#0b111b;--card:#101826;--muted:#9fb3c8;--text:#e6edf6;--green:#22c55e;--red:#ef4444}
+:root{
+  --bg:#ffffff; --card:#ffffff; --muted:#5b6b7a; --text:#0f172a;
+  --line:#e5e7eb; --green:#16a34a; --red:#dc2626; --blue:#0ea5e9;
+}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Heebo,Arial}
-header{position:sticky;top:0;background:#0b111bcc;padding:12px 16px;border-bottom:1px solid #1f2a3a}
-.container{max-width:920px;margin:20px auto;padding:0 16px}
-.card{background:#101826;border:1px solid #1f2a3a;border-radius:14px;padding:14px;margin-bottom:12px}
+header{position:sticky;top:0;background:#ffffffcc;backdrop-filter:blur(8px);
+  padding:12px 16px;border-bottom:1px solid var(--line)}
+.container{max-width:980px;margin:20px auto;padding:0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
 label{display:block;color:var(--muted);font-size:14px;margin-bottom:6px}
-input,button{width:100%;padding:10px;border-radius:10px;border:1px solid #2a3a52;background:#0b111b;color:var(--text)}
+input,button{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--text)}
 button{cursor:pointer}
-button.primary{background:linear-gradient(180deg,#1a7f4b,#11623a)}
+button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
 .hint{color:var(--muted);font-size:13px}
 .row{display:flex;gap:12px;flex-wrap:wrap}
 .col{flex:1 1 260px}
 .ok{color:var(--green)} .bad{color:var(--red)}
 table{width:100%;border-collapse:collapse}
-th,td{padding:8px;border-bottom:1px solid #263246;text-align:right}
+th,td{padding:8px;border-bottom:1px solid var(--line);text-align:right}
+thead th{position:sticky;top:64px;background:#fff}
 </style>
 </head>
 <body>
-<header><div class="container"><b>ייבוא שוברים</b> — HTML → DB (מיפוי אוטומטי לשדות: תאריך, שם עובד, <u>תשלום</u>)</div></header>
+<header><div class="container"><b>ייבוא שוברים</b> — HTML → DB (תאריך, שם עובד, תשלום)</div></header>
 <div class="container">
 
-  <!-- חיבור ל-Supabase -->
+  <!-- חיבור -->
   <div class="card">
     <div class="row">
-      <div class="col">
-        <label>Supabase URL</label>
-        <input id="sbUrl"/>
-      </div>
-      <div class="col">
-        <label>Supabase anon key</label>
-        <input id="sbKey"/>
-      </div>
+      <div class="col"><label>Supabase URL</label><input id="sbUrl"/></div>
+      <div class="col"><label>Supabase anon key</label><input id="sbKey"/></div>
     </div>
     <div id="connStatus" class="hint">מחבר…</div>
   </div>
 
-  <!-- קובץ HTML + פעולות -->
+  <!-- קובץ HTML -->
   <div class="card">
     <label>קובץ HTML עם טבלה (כותרות לדוגמה: תאריך | שם עובד | … | תשלום | …)</label>
     <input id="fileInput" type="file" accept=".html,.htm,text/html"/>
@@ -73,9 +71,17 @@ th,td{padding:8px;border-bottom:1px solid #263246;text-align:right}
   </div>
 
   <!-- תצוגה מקדימה -->
+  <div class="card"><div id="preview"></div></div>
+
+  <!-- לקוחות וסיכומים -->
   <div class="card">
-    <div id="preview"></div>
+    <div class="row" style="align-items:end">
+      <div class="col"><label>חפש לקוח</label><input id="balSearch" placeholder="הקלד שם לקוח…"/></div>
+      <div class="col" style="flex:0 0 200px"><button id="btnRefresh" class="primary">רענן סיכומים</button></div>
+    </div>
+    <div id="balances" style="margin-top:10px"></div>
   </div>
+
 </div>
 
 <script>
@@ -88,21 +94,22 @@ function parseAmount(s){
   const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
 }
-function normDate(s){
+function normDateToISO(s){
   if(!s) return '';
   s=s.replace(/[\.]/g,'/').replace(/\s+/g,' ').trim();
-  let m=s.match(/(\d{1,2})[\/](\d{1,2})[\/](\d{2,4})/);
+  let m=s.match(/(\d{1,2})[\/](\d{1,2})[\/](\d{2,4})/); // dd/mm/yyyy
   if(m){let[d,mn,y]=[m[1],m[2],m[3]]; if(y.length===2) y='20'+y; return `${y.padStart(4,'0')}-${mn.padStart(2,'0')}-${d.padStart(2,'0')}`;}
-  m=s.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+  m=s.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);     // yyyy-mm-dd
   if(m){let[y,mn,d]=[m[1],m[2],m[3]]; return `${y.padStart(4,'0')}-${mn.padStart(2,'0')}-${d.padStart(2,'0')}`;}
   return s;
 }
+function isoToDDMMYYYY(iso){ if(!iso) return ''; const [y,m,d]=iso.split('-'); if(!y||!m||!d) return iso; return `${d.padStart(2,'0')}/${m.padStart(2,'0')}/${y}`; }
 function fmtILS(n){ return new Intl.NumberFormat('he-IL',{style:'currency',currency:'ILS'}).format(Number(n||0)); }
 
 /* ===== Supabase ===== */
 const DEFAULT_URL = "https://ylqpxwgchwalcblfipsu.supabase.co";
 const DEFAULT_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM";
-let supabase=null;
+let supabase=null, balancesCache=[];
 
 async function initSupabase(){
   $('#sbUrl').value = localStorage.getItem('sb_url') || DEFAULT_URL;
@@ -113,6 +120,7 @@ async function initSupabase(){
   localStorage.setItem('sb_key', $('#sbKey').value.trim());
   const { error } = await supabase.auth.getSession();
   $('#connStatus').textContent = error ? ('שגיאה: '+error.message) : 'מחובר ל-Supabase';
+  refreshBalances();
 }
 document.addEventListener('supabase-ready', initSupabase);
 ['change','blur'].forEach(evt=>{
@@ -120,7 +128,7 @@ document.addEventListener('supabase-ready', initSupabase);
   $('#sbKey').addEventListener(evt, initSupabase);
 });
 
-/* ===== File parsing with auto mapping (prefers "תשלום") ===== */
+/* ===== קובץ + מיפוי אוטומטי ===== */
 let pickedRows=[];
 
 function findBestHeaderIndex(headers, wanted, {exclude=[]}={}){
@@ -167,7 +175,7 @@ async function readFile(){
   };
 
   pickedRows = rows.map(r=>({
-    date:  normDate(r[idx.date]  || ''),
+    date:  normDateToISO(r[idx.date]  || ''),
     name:  r[idx.name]           || '',
     amount:parseAmount(r[idx.amount]|| '0')
   })).filter(x=> x.name && x.date);
@@ -175,18 +183,28 @@ async function readFile(){
   return { headers, idx, totalRows: rows.length };
 }
 
-/* ===== UI actions ===== */
+/* ===== תצוגה מקדימה ===== */
 $('#btnPreview').onclick = async ()=>{
   const info = await readFile();
   if(!info){ $('#importStatus').textContent='לא נמצאה טבלה בקובץ / כותרות לא מזוהות'; return; }
-  const sample = pickedRows.slice(0,20);
-  let html = `<div class="hint"><b>תצוגה מקדימה</b> — שורות מוצגות: ${sample.length} מתוך ${info.totalRows}</div>`;
+
+  // איחוד כפילויות (שם+תאריך)
+  const map = new Map();
+  for(const r of pickedRows){
+    const key = `${r.name}|${r.date}`;
+    if(!map.has(key)) map.set(key, {...r});
+    else map.get(key).amount += Number(r.amount||0);
+  }
+  const sample = Array.from(map.values()).slice(0,20);
+
+  let html = `<div class="hint"><b>תצוגה מקדימה</b> — שורות מוצגות: ${sample.length} מתוך ${map.size} (לאחר איחוד כפילויות)</div>`;
   html += '<div style="max-height:340px;overflow:auto"><table><thead><tr><th>תאריך</th><th>שם עובד</th><th>תשלום</th></tr></thead><tbody>';
-  sample.forEach(r=> html += `<tr><td>${r.date}</td><td>${r.name}</td><td>${fmtILS(r.amount)}</td></tr>`);
+  sample.forEach(r=> html += `<tr><td>${isoToDDMMYYYY(r.date)}</td><td>${r.name}</td><td>${fmtILS(r.amount)}</td></tr>`);
   html += '</tbody></table></div>';
   $('#preview').innerHTML = html;
 };
 
+/* ===== ייבוא ל־DB ===== */
 $('#btnImport').onclick = async ()=>{
   try{
     if(!supabase) await initSupabase();
@@ -194,40 +212,76 @@ $('#btnImport').onclick = async ()=>{
     const info = await readFile();
     if(!info){ $('#importStatus').innerHTML='<span class="bad">קובץ/טבלה לא תקינים</span>'; return; }
 
-    // 1) upsert לקוחות לפי name
-    const uniqueNames = Array.from(new Set(pickedRows.map(x=>x.name)));
+    // 1) איחוד כפילויות (שם+תאריך)
+    const uniqueMap = new Map();
+    for (const row of pickedRows) {
+      const key = `${row.name}|${row.date}`;
+      if (!uniqueMap.has(key)) uniqueMap.set(key, { ...row });
+      else uniqueMap.get(key).amount += Number(row.amount || 0);
+    }
+    const rowsForImport = Array.from(uniqueMap.values());
+    if(!rowsForImport.length){ $('#importStatus').innerHTML='<span class="bad">אין רשומות חוקיות לייבוא</span>'; return; }
+
+    // 2) upsert לקוחות לפי name
+    const uniqueNames = Array.from(new Set(rowsForImport.map(x=>x.name)));
     const { error: cErr } = await supabase.from('customers').upsert(
       uniqueNames.map(n=>({name:n})),
       { onConflict:'name' }
     );
     if(cErr){ $('#importStatus').innerHTML = '<span class="bad">שגיאה ביצירת לקוחות: '+cErr.message+'</span>'; return; }
 
-    // 2) מיפוי שם → customer_id
+    // 3) name → customer_id
     const { data: cust, error: gErr } = await supabase.from('customers')
       .select('customer_id,name').in('name', uniqueNames);
     if(gErr){ $('#importStatus').innerHTML = '<span class="bad">שגיאה בקריאת לקוחות: '+gErr.message+'</span>'; return; }
     const idByName = Object.fromEntries((cust||[]).map(c=>[c.name, c.customer_id]));
 
-    // 3) בניית רשומות שוברים
-    const coupons = pickedRows
+    // 4) בנה שוברים
+    const coupons = rowsForImport
       .map(x=>({ customer_id: idByName[x.name], date: x.date, amount: x.amount, redeemed:false, source_label:'html-upload' }))
       .filter(x=>x.customer_id);
 
-    if(!coupons.length){ $('#importStatus').innerHTML='<span class="bad">אין רשומות חוקיות לייבוא</span>'; return; }
-
-    // 4) upsert באצוות — מניעת כפילות לפי (customer_id,date)
+    // 5) DO NOTHING על קונפליקט
     const CHUNK=500;
     for(let i=0;i<coupons.length;i+=CHUNK){
       const slice=coupons.slice(i,i+CHUNK);
-      const { error: uErr } = await supabase.from('coupons').upsert(slice, { onConflict:'customer_id,date' });
+      const { error: uErr } = await supabase.from('coupons').upsert(
+        slice,
+        { onConflict:'customer_id,date', ignoreDuplicates:true }
+      );
       if(uErr){ $('#importStatus').innerHTML = '<span class="bad">שגיאת ייבוא: '+uErr.message+'</span>'; return; }
     }
 
-    $('#importStatus').innerHTML = `<span class="ok">הייבוא הושלם. נוספו/עודכנו ${coupons.length} שורות.</span>`;
+    $('#importStatus').innerHTML = `<span class="ok">הייבוא הושלם. הוכנסו/דלגו ${coupons.length} רשומות (ללא עדכון קיימות).</span>`;
+    refreshBalances();
   }catch(e){
     $('#importStatus').innerHTML = '<span class="bad">שגיאה: '+(e.message||e)+'</span>';
   }
 };
+
+/* ===== סיכומי לקוחות ===== */
+async function refreshBalances(){
+  try{
+    const { data, error } = await supabase.from('customer_balances').select('*').order('name');
+    if(error){ $('#balances').innerHTML='<span class="hint">שגיאה: '+(error.message||'')+'</span>'; return; }
+    balancesCache = data||[];
+    renderBalances(balancesCache);
+  }catch(e){ $('#balances').innerHTML='<span class="hint">שגיאה: '+(e.message||e)+'</span>'; }
+}
+function renderBalances(list){
+  let html='<table><thead><tr><th>לקוח</th><th>סה״כ נטען</th><th>סה״כ מומש</th><th>זמין</th></tr></thead><tbody>';
+  list.forEach(r=>{
+    html+=`<tr><td>${r.name}</td><td>${fmtILS(r.total_loaded)}</td><td>${fmtILS(r.total_redeemed)}</td><td><b>${fmtILS(r.available_amount)}</b></td></tr>`;
+  });
+  html+='</tbody></table>';
+  $('#balances').innerHTML=html;
+}
+$('#btnRefresh').addEventListener('click', refreshBalances);
+$('#balSearch').addEventListener('input', ()=>{
+  const q=$('#balSearch').value.toLowerCase().trim();
+  const filtered = balancesCache.filter(r=> r.name.toLowerCase().includes(q));
+  renderBalances(filtered);
+});
 </script>
 </body>
 </html>
