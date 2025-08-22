@@ -3,24 +3,29 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
 <title>גודי שוברים - מערכת ניהול</title>
 
-<!-- supabase-js עם Fallback -->
 <script>
-(function loadSupabase(){
-  const urls=[
-    "https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js",
-    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js",
-    "https://cdnjs.cloudflare.com/ajax/libs/supabase-js/2.45.4/supabase.min.js"
-  ];
-  (function go(i){
-    if(i>=urls.length){ window.__supabaseLoaded=true; document.dispatchEvent(new Event("supabase-ready")); return; }
-    const s=document.createElement("script"); s.src=urls[i]; s.async=true;
-    s.onload=()=>{ window.__supabaseLoaded=true; document.dispatchEvent(new Event("supabase-ready")); };
-    s.onerror=()=>go(i+1);
-    document.head.appendChild(s);
-  })(0);
-})();
+  // גרסה לקבצים/שאילתות כדי לעקוף קאש
+  window.APP_VERSION = "v7-2025-08-22-15-50";
+  (function loadSupabase(){
+    const v = "?v="+window.APP_VERSION;
+    const urls=[
+      "https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"+v,
+      "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"+v,
+      "https://cdnjs.cloudflare.com/ajax/libs/supabase-js/2.45.4/supabase.min.js"+v
+    ];
+    (function go(i){
+      if(i>=urls.length){ window.__supabaseLoaded=true; document.dispatchEvent(new Event("supabase-ready")); return; }
+      const s=document.createElement("script"); s.src=urls[i]; s.async=true;
+      s.onload=()=>{ window.__supabaseLoaded=true; document.dispatchEvent(new Event("supabase-ready")); };
+      s.onerror=()=>go(i+1);
+      document.head.appendChild(s);
+    })(0);
+  })();
 </script>
 
 <style>
@@ -48,12 +53,17 @@ thead th{background:#f8fafc;position:sticky;top:64px}
 .list{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:10px}
 .list button{display:block;width:100%;text-align:right;border:0;border-bottom:1px solid var(--line);background:#fff;padding:10px}
 .list button:last-child{border-bottom:0}
+
+/* דיבאג */
+.debug{max-width:860px;margin:10px auto 30px;padding:10px 16px;border-top:1px dashed #ddd;color:#475569;font-size:12px}
+.debug details{background:#fafafa;border:1px solid #eee;border-radius:10px;padding:8px}
+.debug code{background:#f3f4f6;padding:1px 4px;border-radius:4px}
 </style>
 </head>
 <body>
 <header>
   <!-- שים את קובץ הלוגו בשם logo.png באותה תיקייה -->
-  <img src="logo.png" alt="לוגו">
+  <img id="logo" alt="לוגו">
   <h2 style="margin:0">גודי שוברים - מערכת ניהול</h2>
   <div style="flex:1"></div>
   <button id="btnLogout" type="button" class="small" title="יציאה">יציאה</button>
@@ -85,96 +95,123 @@ thead th{background:#f8fafc;position:sticky;top:64px}
   </div>
 </div>
 
+<!-- דיבאג -->
+<div class="debug">
+  <details open>
+    <summary>דיבאג</summary>
+    <div>גרסה: <code id="v"></code></div>
+    <div>סטטוס: <span id="dbgStatus">—</span></div>
+    <div>customers: <span id="dbgCustCount">0</span> | ids מ-coupons: <span id="dbgIdsCount">0</span> | לקוחות בשימוש: <span id="dbgUsableCount">0</span></div>
+    <div>שגיאה אחרונה: <code id="dbgErr">—</code></div>
+  </details>
+</div>
+
 <script>
 /* ===== Utils ===== */
 const $=s=>document.querySelector(s);
 const fmtILS=n=>new Intl.NumberFormat('he-IL',{style:'currency',currency:'ILS'}).format(Number(n||0));
 const isoToDDMMYYYY=iso=>{ if(!iso) return ''; const [y,m,d]=String(iso).split('-'); return `${d.padStart(2,'0')}/${m.padStart(2,'0')}/${y}`; };
 const safeMsg=e=>(e&&(e.message||e.statusText||e.name))||String(e||'Unknown');
+const setDbg=(k,v)=>{ const el=$("#"+k); if(el) el.textContent=v; };
+
+$("#v").textContent = window.APP_VERSION || '';
 
 /* ===== Supabase ===== */
 const SB_URL  = "https://ylqpxwgchwalcblfipsu.supabase.co";
 const SB_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM";
-
 let sb=null, customers=[];
+
+document.getElementById('logo').src = "logo.png?v="+(window.APP_VERSION||'');
 
 /* אתחול כאשר הספרייה מוכנה */
 document.addEventListener('supabase-ready', init);
 async function init(){
   try{
-    if(!window.supabase){ $('#connStatus').textContent='ספריית Supabase לא נטענה'; return; }
+    if(!window.supabase){ $("#connStatus").textContent='ספריית Supabase לא נטענה'; return; }
     sb = window.supabase.createClient(SB_URL, SB_ANON);
     const { error } = await sb.auth.getSession();
-    $('#connStatus').textContent = error ? ('שגיאה: '+error.message) : 'מחובר ל-Supabase';
+    $("#connStatus").textContent = error ? ('שגיאה: '+error.message) : 'מחובר ל-Supabase';
+    setDbg("dbgStatus", "חיבור יוצר");
     await loadCustomers();
   }catch(e){
-    $('#connStatus').textContent='שגיאת חיבור: '+safeMsg(e);
+    $("#connStatus").textContent='שגיאת חיבור: '+safeMsg(e);
+    setDbg("dbgErr", safeMsg(e));
   }
 }
 
 /* טעינת לקוחות:
-   1) אוספים customer_id ייחודיים מתוך coupons
-   2) מביאים עבורם name מטבלת customers
+   א. ננסה להביא ישירות מ-customers (גם אם אין להם שוברים).
+   ב. אם לא חזר כלום / שגיאה — נבנה לפי customer_id ייחודי מתוך coupons ואז ניקח את השמות מ-customers.
 */
 async function loadCustomers(){
   try{
-    // שלב 1: customer_id ייחודי מתוך coupons
-    const idsRes = await sb
-      .from('coupons')
-      .select('customer_id')
-      .not('customer_id','is',null);
-    if(idsRes.error){ throw idsRes.error; }
+    // שלב א
+    let cust = [];
+    let c1 = await sb.from('customers').select('customer_id,name').order('name');
+    if(c1.error){ setDbg("dbgErr", safeMsg(c1.error)); }
+    cust = (c1.data||[]).map(r=>({customer_id:r.customer_id, name:r.name||('לקוח #'+r.customer_id)}));
 
-    const ids = [...new Set((idsRes.data||[]).map(r=>r.customer_id))];
-    if(ids.length===0){
-      $('#connStatus').textContent='אין לקוחות (customers ריק ו־coupons ללא רשומות).';
-      customers = [];
+    setDbg("dbgCustCount", cust.length);
+
+    // אם יש — משתמשים בזה
+    if(cust.length>0){
+      customers = cust;
+      $("#connStatus").textContent = `נטענו ${customers.length} לקוחות מ-customers`;
+      setDbg("dbgUsableCount", customers.length);
       return;
     }
 
-    // שלב 2: שמות מתוך customers
-    const namesRes = await sb
-      .from('customers')
-      .select('customer_id,name')
-      .in('customer_id', ids);
-    if(namesRes.error){ throw namesRes.error; }
+    // שלב ב: ids מ-coupons
+    const idsRes = await sb.from('coupons').select('customer_id').not('customer_id','is',null);
+    if(idsRes.error){ throw idsRes.error; }
+    const ids = [...new Set((idsRes.data||[]).map(r=>r.customer_id))];
+    setDbg("dbgIdsCount", ids.length);
 
+    if(ids.length===0){
+      $("#connStatus").textContent='אין לקוחות (customers ריק ו-coupons ריק).';
+      setDbg("dbgUsableCount", 0);
+      return;
+    }
+
+    const namesRes = await sb.from('customers').select('customer_id,name').in('customer_id', ids);
+    if(namesRes.error){ throw namesRes.error; }
     const map = new Map(namesRes.data.map(r=>[String(r.customer_id), r.name||('לקוח #'+r.customer_id)]));
     customers = ids.map(id=>({customer_id:id, name: map.get(String(id)) || ('לקוח #'+id)}))
                    .sort((a,b)=>a.name.localeCompare(b.name,'he'));
-
-    $('#connStatus').textContent = `נטענו ${customers.length} לקוחות`;
+    $("#connStatus").textContent = `נטענו ${customers.length} לקוחות (ids מתוך coupons)`;
+    setDbg("dbgUsableCount", customers.length);
   }catch(e){
-    $('#connStatus').textContent = 'שגיאה בטעינת לקוחות: '+safeMsg(e);
+    $("#connStatus").textContent = 'שגיאה בטעינת לקוחות: '+safeMsg(e);
+    setDbg("dbgErr", safeMsg(e));
     customers = [];
   }
 }
 
 /* מודאל בחירה */
 function openModal(){
-  $('#modalPick').style.display='flex';
-  $('#searchInput').value='';
-  $('#searchInput').focus();
+  $("#modalPick").style.display='flex';
+  $("#searchInput").value='';
+  $("#searchInput").focus();
   renderList(customers);
 }
-function closeModal(){ $('#modalPick').style.display='none'; }
-$('#btnPick').addEventListener('click', openModal);
-$('#btnCloseModal').addEventListener('click', closeModal);
+function closeModal(){ $("#modalPick").style.display='none'; }
+$("#btnPick").addEventListener('click', openModal);
+$("#btnCloseModal").addEventListener('click', closeModal);
 
-$('#searchInput').addEventListener('input', ()=>{
-  const q=$('#searchInput').value.toLowerCase().trim();
+$("#searchInput").addEventListener('input', ()=>{
+  const q=$("#searchInput").value.toLowerCase().trim();
   const list = !q ? customers : customers.filter(c=> (c.name||'').toLowerCase().includes(q));
   renderList(list);
 });
 function renderList(list){
-  const el=$('#listWrap');
+  const el=$("#listWrap");
   if(!list.length){ el.innerHTML='<div style="padding:10px;color:#666">לא נמצאו לקוחות</div>'; return; }
   el.innerHTML=list.map(c=>`<button type="button" data-id="${c.customer_id}" data-name="${c.name}">${c.name}</button>`).join('');
 }
 document.getElementById('listWrap').addEventListener('click', ev=>{
   const b=ev.target.closest('button[data-id]'); if(!b) return;
   const id=b.dataset.id, nm=b.dataset.name;
-  $('#currentCustomer').value = nm;
+  $("#currentCustomer").value = nm;
   closeModal();
   openCustomer(id, nm);
 });
@@ -188,11 +225,11 @@ async function openCustomer(customerId, nameFromList){
       .order('date',{ascending:false});
     if(r.error) throw r.error;
 
-    $('#custTitle').textContent='לקוח: '+(nameFromList||'');
+    $("#custTitle").textContent='לקוח: '+(nameFromList||'');
     const rows = r.data||[];
     if(rows.length===0){
-      $('#couponTable').innerHTML='<div class="hint">אין שוברים ללקוח זה.</div>';
-      $('#custCard').style.display='block';
+      $("#couponTable").innerHTML='<div class="hint">אין שוברים ללקוח זה.</div>';
+      $("#custCard").style.display='block';
       return;
     }
     let html='<table><thead><tr><th>תאריך</th><th>סכום</th><th>סטטוס</th><th>פעולה</th></tr></thead><tbody>';
@@ -207,10 +244,11 @@ async function openCustomer(customerId, nameFromList){
       </tr>`;
     });
     html+='</tbody></table>';
-    $('#couponTable').innerHTML=html;
-    $('#custCard').style.display='block';
+    $("#couponTable").innerHTML=html;
+    $("#custCard").style.display='block';
   }catch(e){
     alert('שגיאת קריאה: '+safeMsg(e));
+    setDbg("dbgErr", safeMsg(e));
   }
 }
 
@@ -226,26 +264,21 @@ document.addEventListener('click', async ev=>{
     const patch = isRed ? { redeemed:false, redeemed_at:null } : { redeemed:true, redeemed_at:new Date().toISOString() };
     const { error } = await sb.from('coupons').update(patch).eq('id', id);
     if(error) throw error;
-    // רענון הכרטיס
-    const name=$('#currentCustomer').value;
+    const name=$("#currentCustomer").value;
     openCustomer(cid, name);
-  }catch(e){ alert('שגיאת עדכון: '+safeMsg(e)); }
+  }catch(e){ alert('שגיאת עדכון: '+safeMsg(e)); setDbg("dbgErr", safeMsg(e)); }
 });
 
-/* יציאה – עובד בוודאות */
+/* יציאה – גם inline וגם מאזין, וחשוף ל-window */
 async function logoutApp(){
   try{ await sb?.auth?.signOut?.(); }catch{}
-  // אם בעתיד תשמור URL/KEY מותאמים:
-  // localStorage.removeItem('sb_url'); localStorage.removeItem('sb_key');
-  // איפוס UI:
-  $('#currentCustomer').value='לא נבחר';
-  $('#custCard').style.display='none';
+  $("#currentCustomer").value='לא נבחר';
+  $("#custCard").style.display='none';
   document.getElementById('modalPick').style.display='none';
-  // רענון מלא (בטוח במוביל):
-  location.reload();
+  location.reload(); // רענון מלא – הכי יציב במובייל
 }
-window.logoutApp = logoutApp;                            // בטוח ל-inline handler
-document.getElementById('btnLogout').addEventListener('click', logoutApp); // וגם מאזין JS
+window.logoutApp = logoutApp;
+document.getElementById('btnLogout').addEventListener('click', logoutApp);
 </script>
 </body>
 </html>
