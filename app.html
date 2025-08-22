@@ -37,7 +37,6 @@ button{cursor:pointer;border-radius:10px;border:1px solid var(--line);background
 button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
 button.small{padding:6px 10px;font-size:13px}
 .row{display:flex;gap:12px;flex-wrap:wrap}
-.col{flex:1 1 260px}
 table{width:100%;border-collapse:collapse;margin-top:10px}
 th,td{padding:8px;border-bottom:1px solid var(--line);text-align:right}
 thead th{background:#f8fafc;position:sticky;top:64px}
@@ -54,11 +53,11 @@ thead th{background:#f8fafc;position:sticky;top:64px}
 </head>
 <body>
 <header>
-  <!-- שים את התמונה בתיקייה וקרא לה logo.png -->
+  <!-- שמור את קובץ הלוגו בשם logo.png ליד הקובץ -->
   <img src="logo.png" alt="לוגו">
   <h2 style="margin:0">גודי שוברים - מערכת ניהול</h2>
   <div style="flex:1"></div>
-  <button id="btnLogout" class="small" title="יציאה">יציאה</button>
+  <button id="btnLogout" class="small" title="יציאה" onclick="logoutApp()">יציאה</button>
 </header>
 
 <div class="container">
@@ -92,7 +91,7 @@ thead th{background:#f8fafc;position:sticky;top:64px}
 
 <script>
 /* ===== Utils ===== */
-const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+const $=s=>document.querySelector(s);
 const fmtILS=n=>new Intl.NumberFormat('he-IL',{style:'currency',currency:'ILS'}).format(Number(n||0));
 const isoToDDMMYYYY=iso=>{ if(!iso) return ''; const [y,m,d]=String(iso).split('-'); return `${d.padStart(2,'0')}/${m.padStart(2,'0')}/${y}`; };
 const safeMsg=e=>(e&&(e.message||e.statusText||e.name))||String(e||'Unknown');
@@ -107,7 +106,7 @@ async function init(){
   try{
     if(!window.supabase){ $('#connStatus').textContent='ספריית Supabase לא נטענה'; return; }
     sb = window.supabase.createClient(SB_URL, SB_ANON);
-    const { error } = await sb.auth.getSession(); // רק כדי לוודא חיבור
+    const { error } = await sb.auth.getSession(); // בדיקת חיבור
     $('#connStatus').textContent = error ? ('שגיאה: '+error.message) : 'מחובר ל-Supabase';
     await loadCustomers();
   }catch(e){
@@ -116,12 +115,34 @@ async function init(){
 }
 document.addEventListener('supabase-ready', init);
 
-/* טעינת לקוחות */
+/* טעינת לקוחות – customers, ואם ריק: distinct name מה-coupons */
 async function loadCustomers(){
-  const { data, error } = await sb.from('customers').select('customer_id,name').order('name');
-  if(error){ $('#connStatus').textContent='שגיאה בטעינת לקוחות: '+safeMsg(error); return; }
-  customers = data||[];
-  $('#connStatus').textContent = `נטענו ${customers.length} לקוחות`;
+  try{
+    const { data, error } = await sb.from('customers').select('customer_id,name').order('name');
+    if(error){ $('#connStatus').textContent='שגיאה בטעינת לקוחות: '+safeMsg(error); return; }
+    customers = data||[];
+    if(customers.length===0){
+      // fallback: שמות ייחודיים מתוך coupons
+      const res = await sb.from('coupons').select('name').order('name').limit(10000);
+      if(res.error){ $('#connStatus').textContent='שגיאה בטעינת שמות מ-coupons: '+safeMsg(res.error); }
+      const uniq = [];
+      const seen = new Set();
+      (res.data||[]).forEach(r=>{
+        const n=(r.name||'').trim();
+        if(n && !seen.has(n)){ seen.add(n); uniq.push({customer_id:null, name:n}); }
+      });
+      customers = uniq;
+      if(customers.length===0){
+        $('#connStatus').textContent='אין לקוחות (customers ריק ו־coupons ללא שמות).';
+      }else{
+        $('#connStatus').textContent=`נטענו ${customers.length} לקוחות (מתוך coupons)`;
+      }
+    }else{
+      $('#connStatus').textContent=`נטענו ${customers.length} לקוחות`;
+    }
+  }catch(e){
+    $('#connStatus').textContent='שגיאה בטעינת לקוחות: '+safeMsg(e);
+  }
 }
 
 /* מודאל בחירה */
@@ -131,45 +152,45 @@ $('#btnPick').onclick=openModal; $('#btnCloseModal').onclick=closeModal;
 
 $('#searchInput').oninput=()=>{
   const q=$('#searchInput').value.toLowerCase().trim();
-  renderList(!q?customers:customers.filter(c=>c.name.toLowerCase().includes(q)));
+  const list=!q?customers:customers.filter(c=>c.name.toLowerCase().includes(q));
+  renderList(list);
 };
 function renderList(list){
   const el=$('#listWrap');
   if(!list.length){ el.innerHTML='<div style="padding:10px;color:#666">לא נמצאו לקוחות</div>'; return; }
-  el.innerHTML=list.map(c=>`<button type="button" data-id="${c.customer_id}" data-name="${c.name}">${c.name}</button>`).join('');
+  el.innerHTML=list.map(c=>`<button type="button" data-id="${c.customer_id??''}" data-name="${c.name}">${c.name}</button>`).join('');
 }
-$('#listWrap').addEventListener('click', ev=>{
-  const b=ev.target.closest('button[data-id]'); if(!b) return;
+document.getElementById('listWrap').addEventListener('click', ev=>{
+  const b=ev.target.closest('button[data-name]'); if(!b) return;
   $('#currentCustomer').value=b.dataset.name; closeModal();
-  openCustomer(b.dataset.id, b.dataset.name);
+  openCustomer(b.dataset.id || null, b.dataset.name);
 });
 
 /* פתיחת כרטיס לקוח + שליפת שוברים */
 async function openCustomer(customerId, nameFromList){
   try{
-    // ננסה קודם לפי customer_id, ואם אין תוצאות – נשלוף לפי name
-    let { data: rows, error } = await sb
-      .from('coupons')
-      .select('id,date,amount,redeemed,redeemed_at')
-      .eq('customer_id', customerId)
-      .order('date',{ascending:false});
+    let rows=[], err=null;
 
-    if(error){ throw error; }
-    if(!rows || rows.length===0){
-      // התאמה לפי שם, למקרה שה-importer כתב רק name
-      const name = nameFromList || (customers.find(c=>String(c.customer_id)===String(customerId))?.name);
-      if(name){
-        const res2 = await sb.from('coupons')
-          .select('id,date,amount,redeemed,redeemed_at')
-          .eq('name', name)
-          .order('date',{ascending:false});
-        if(res2.error) throw res2.error;
-        rows = res2.data || [];
-      }
+    if(customerId){ // ננסה לפי customer_id אם קיים
+      const r = await sb.from('coupons')
+        .select('id,date,amount,redeemed,redeemed_at')
+        .eq('customer_id', customerId)
+        .order('date',{ascending:false});
+      err=r.error; rows=r.data||[];
     }
 
-    $('#custTitle').textContent='לקוח: '+(nameFromList || (customers.find(c=>String(c.customer_id)===String(customerId))?.name)||'');
-    if(!rows || rows.length===0){
+    if(!customerId || !rows.length){
+      // נשלוף לפי name
+      const r2 = await sb.from('coupons')
+        .select('id,date,amount,redeemed,redeemed_at')
+        .eq('name', nameFromList)
+        .order('date',{ascending:false});
+      if(r2.error) throw r2.error;
+      rows = r2.data||[];
+    }else if(err){ throw err; }
+
+    $('#custTitle').textContent='לקוח: '+(nameFromList||'');
+    if(!rows.length){
       $('#couponTable').innerHTML='<div class="hint">אין שוברים ללקוח זה.</div>';
       $('#custCard').style.display='block';
       return;
@@ -206,20 +227,25 @@ document.addEventListener('click', async ev=>{
     const patch = isRed ? { redeemed:false, redeemed_at:null } : { redeemed:true, redeemed_at:new Date().toISOString() };
     const { error } = await sb.from('coupons').update(patch).eq('id', id);
     if(error) throw error;
-    // רענון הכרטיס הנוכחי: נאתר שוב את הלקוח בשדה
+    // רענון הכרטיס
     const name=$('#currentCustomer').value;
-    const c=customers.find(x=>x.name===name);
-    openCustomer(c?.customer_id, name);
+    openCustomer(null, name);
   }catch(e){ alert('שגיאת עדכון: '+safeMsg(e)); }
 });
 
 /* יציאה */
-$('#btnLogout').addEventListener('click', async ()=>{
+async function logoutApp(){
   try{ await sb?.auth?.signOut?.(); }catch{}
-  // אם שמרת פעם URL/KEY אחרים ב-localStorage ורוצה למחוק אותם:
+  // אם תרצה למחוק גם URL/KEY מותאמים אישית:
   // localStorage.removeItem('sb_url'); localStorage.removeItem('sb_key');
+  // ניקוי מסך בלי רענון:
+  $('#currentCustomer').value='לא נבחר';
+  $('#custCard').style.display='none';
+  document.getElementById('modalPick').style.display='none';
+  // רענון מלא כדי לאפס מצב (הכי בטוח במוביל):
   location.reload();
-});
+}
+document.getElementById('btnLogout').addEventListener('click', logoutApp);
 </script>
 </body>
 </html>
