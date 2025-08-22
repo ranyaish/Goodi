@@ -1,0 +1,42 @@
+name: Goodi Daily Import
+
+on:
+  # הרצה ידנית מה-UI
+  workflow_dispatch: {}
+  # תזמון אוטומטי: 11:00 ו-20:00 UTC (≈ 14:00 ו-23:00 בישראל בקיץ)
+  schedule:
+    - cron: "0 11 * * *"
+    - cron: "0 20 * * *"
+
+# מונע חפיפה אם ריצה אחת עדיין נמשכת
+concurrency:
+  group: goodi-daily-import
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run scraper
+        env:
+          GOODI_USER: ${{ secrets.GOODI_USER }}
+          GOODI_PASS: ${{ secrets.GOODI_PASS }}
+          SB_URL: ${{ secrets.SB_URL }}
+          SB_SERVICE_KEY: ${{ secrets.SB_SERVICE_KEY }}
+        run: npm run scrape
