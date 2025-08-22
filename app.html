@@ -1,11 +1,60 @@
+
+
+<section class="card" id="lastRunCard" style="margin:12px 0;">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+    <strong>אוטומציה – ריצה אחרונה</strong>
+    <span id="lastRunUpdated" style="font-size:12px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:999px;padding:4px 10px;">טוען…</span>
+  </div>
+  <div id="lastRunBody" style="margin-top:8px;color:#64748b;">מביא נתונים…</div>
+</section>
+
+<script>
+(async function loadLastRun(){
+  const url = "https://raw.githubusercontent.com/ranyaish/Goodi/main/.wf-last.json?cb="+Date.now();
+  const $u = document.getElementById('lastRunUpdated');
+  const $b = document.getElementById('lastRunBody');
+  try{
+    const res = await fetch(url, { cache:'no-store' });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const d = await res.json();
+
+    const when = new Date(d.created_at).toLocaleString('he-IL', { timeZone:'Asia/Jerusalem' });
+    const ok = d.status === 'success';
+    const inProg = d.status && !['success','failure','cancelled','timed_out'].includes(d.status);
+    const color = ok ? '#16a34a' : (inProg ? '#f59e0b' : '#dc2626');
+    const heb = ok ? '✔️ הצלחה' : (inProg ? '⏳ בתהליך' : '❌ כשל');
+
+    $u.textContent = 'עודכן: ' + when;
+    $b.innerHTML = `
+      <div style="display:flex;gap:10px;align-items:center;">
+        <span style="width:10px;height:10px;border-radius:50%;background:${color}"></span>
+        <div>
+          <div><strong>סטטוס:</strong> ${heb}</div>
+          <div style="font-size:12px;opacity:.8;">אירוע: ${d.event} · ריצה #${d.run_number}</div>
+          <div style="margin-top:6px;">
+            <a href="${d.url}" target="_blank" rel="noopener" style="color:#0ea5e9;text-decoration:underline;">פתח ב-GitHub ↗</a>
+          </div>
+        </div>
+      </div>
+    `;
+  }catch(e){
+    $u.textContent = 'שגיאה';
+    $b.textContent = 'לא מצליח לטעון את לוג הריצה האחרונה.';
+  }
+})();
+</script>
+
+
+
+
+
 <!doctype html>
 <html lang="he" dir="rtl">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>גודי שוברים - מערכת ניהול</title>
-  <iframe src="./wf-last-widget.html" style="width:100%;height:170px;border:0;"></iframe> 
-  <style>
+   <style>
     body{font-family:system-ui,Arial,Heebo,sans-serif;background:#fff;color:#111;margin:0}
     header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #eee}
     .brand{display:flex;gap:12px;align-items:center}
