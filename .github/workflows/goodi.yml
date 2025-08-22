@@ -30,7 +30,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm ci
+          npm install --no-audit --no-fund
           npx playwright install --with-deps chromium
 
       - name: Run scraper
