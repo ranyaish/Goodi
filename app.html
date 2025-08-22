@@ -9,23 +9,23 @@
 <title>גודי שוברים - מערכת ניהול</title>
 
 <script>
-  // גרסת קובץ לעקיפת קאש
-  window.APP_VERSION = "v8-2025-08-22-16-05";
-  (function loadSupabase(){
-    const v = "?v="+window.APP_VERSION;
-    const urls=[
-      "https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"+v,
-      "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"+v,
-      "https://cdnjs.cloudflare.com/ajax/libs/supabase-js/2.45.4/supabase.min.js"+v
-    ];
-    (function go(i){
-      if(i>=urls.length){ window.__supabaseLoaded=true; document.dispatchEvent(new Event("supabase-ready")); return; }
-      const s=document.createElement("script"); s.src=urls[i]; s.async=true;
-      s.onload=()=>{ window.__supabaseLoaded=true; document.dispatchEvent(new Event("supabase-ready")); };
-      s.onerror=()=>go(i+1);
-      document.head.appendChild(s);
-    })(0);
-  })();
+// גרסה לעקיפת קאש
+window.APP_VERSION = "v9-2025-08-22-16-20";
+// טוען supabase-js עם פרמטר גרסה
+(function loadSupabase(){
+  const v="?v="+window.APP_VERSION;
+  const urls=[
+    "https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"+v,
+    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"+v
+  ];
+  (function go(i){
+    if(i>=urls.length){ document.dispatchEvent(new Event("supabase-ready")); return; }
+    const s=document.createElement("script"); s.src=urls[i]; s.async=true;
+    s.onload=()=>document.dispatchEvent(new Event("supabase-ready"));
+    s.onerror=()=>go(i+1);
+    document.head.appendChild(s);
+  })(0);
+})();
 </script>
 
 <style>
@@ -47,7 +47,7 @@ thead th{background:#f8fafc;position:sticky;top:64px}
 .badge{padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:12px}
 .hint{color:var(--muted);font-size:13px}
 
-/* מודאל */
+/* מודאל כללי */
 .modal-b{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:9999}
 .modal{background:#fff;border:1px solid var(--line);border-radius:14px;max-width:460px;width:92%;padding:14px}
 .list{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:10px}
@@ -65,17 +65,37 @@ thead th{background:#f8fafc;position:sticky;top:64px}
   <img id="logo" alt="לוגו">
   <h2 style="margin:0">גודי שוברים - מערכת ניהול</h2>
   <div style="flex:1"></div>
-  <button id="btnLogout" type="button" class="small" title="יציאה">יציאה</button>
+  <button id="btnLogout" type="button" class="small">יציאה</button>
 </header>
 
 <div class="container">
-  <div class="card">
+  <!-- כרטיס התחברות -->
+  <div class="card" id="authCard">
+    <h3 style="margin:0 0 8px 0">כניסה</h3>
+    <div style="display:grid;gap:8px;grid-template-columns:1fr 1fr;align-items:end">
+      <div>
+        <label>אימייל</label>
+        <input id="email" type="email" placeholder="you@example.com"/>
+      </div>
+      <div>
+        <label>סיסמה</label>
+        <input id="password" type="password" placeholder="••••••••"/>
+      </div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+      <button id="btnLogin" class="primary">התחבר / הירשם</button>
+      <span id="authMsg" class="hint"></span>
+    </div>
+  </div>
+
+  <!-- כרטיס עבודה -->
+  <div class="card" id="workCard" style="display:none">
     <div style="margin-bottom:10px">
       <button id="btnPick" type="button" class="primary">בחר לקוח</button>
     </div>
     <label>לקוח נוכחי</label>
     <input id="currentCustomer" placeholder="לא נבחר" disabled/>
-    <div id="connStatus" class="hint" style="margin-top:8px">מחבר…</div>
+    <div id="connStatus" class="hint" style="margin-top:8px">—</div>
   </div>
 
   <div class="card" id="custCard" style="display:none">
@@ -100,65 +120,99 @@ thead th{background:#f8fafc;position:sticky;top:64px}
     <summary>דיבאג</summary>
     <div>גרסה: <code id="v"></code></div>
     <div>סטטוס: <span id="dbgStatus">—</span></div>
-    <div>customers (טבלה): <span id="dbgCustCount">0</span> | לקוחות לשימוש: <span id="dbgUsableCount">0</span></div>
+    <div>customers: <span id="dbgCustCount">0</span></div>
     <div>שגיאה אחרונה: <code id="dbgErr">—</code></div>
   </details>
 </div>
 
 <script>
-/* ===== Utils ===== */
+/* ===== קבועים ===== */
+const SB_URL  = "https://ylqpxwgchwalcblfipsu.supabase.co";
+const SB_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM";
 const $=s=>document.querySelector(s);
 const fmtILS=n=>new Intl.NumberFormat('he-IL',{style:'currency',currency:'ILS'}).format(Number(n||0));
 const isoToDDMMYYYY=iso=>{ if(!iso) return ''; const [y,m,d]=String(iso).split('-'); return `${d.padStart(2,'0')}/${m.padStart(2,'0')}/${y}`; };
 const safeMsg=e=>(e&&(e.message||e.statusText||e.name))||String(e||'Unknown');
 const setDbg=(k,v)=>{ const el=$("#"+k); if(el) el.textContent=v; };
 
-$("#v").textContent = window.APP_VERSION || '';
-
-/* ===== Supabase ===== */
-const SB_URL  = "https://ylqpxwgchwalcblfipsu.supabase.co";
-const SB_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM";
-let sb=null, customers=[];
-
+$("#v").textContent = window.APP_VERSION||'';
 document.getElementById('logo').src = "logo.png?v="+(window.APP_VERSION||'');
 
-/* אתחול */
-document.addEventListener('supabase-ready', init);
-async function init(){
-  try{
-    if(!window.supabase){ $("#connStatus").textContent='ספריית Supabase לא נטענה'; return; }
-    sb = window.supabase.createClient(SB_URL, SB_ANON);
-    const { error } = await sb.auth.getSession();
-    $("#connStatus").textContent = error ? ('שגיאה: '+error.message) : 'מחובר ל-Supabase';
-    setDbg("dbgStatus", "חיבור יוצר");
+let sb=null, customers=[];
+
+/* ===== אתחול ספרייה ===== */
+document.addEventListener('supabase-ready', ()=>{
+  if(!window.supabase){ alert("ספריית Supabase לא נטענה"); return; }
+  sb = window.supabase.createClient(SB_URL, SB_ANON);
+  boot();
+});
+
+async function boot(){
+  // יש סשן? נלך ישר לעבודה
+  const { data:{ session } } = await sb.auth.getSession();
+  if(session){
+    $("#authCard").style.display='none';
+    $("#workCard").style.display='block';
+    $("#connStatus").textContent='מחובר (authenticated)';
     await loadCustomersAll();
-  }catch(e){
-    $("#connStatus").textContent='שגיאת חיבור: '+safeMsg(e);
-    setDbg("dbgErr", safeMsg(e));
+  }else{
+    $("#authCard").style.display='block';
+    $("#workCard").style.display='none';
+    $("#connStatus").textContent='דרושה התחברות';
   }
 }
 
-/* טען את כל הלקוחות מ-customers (ללא תלות בקופונים) */
+/* ===== התחברות ===== */
+$("#btnLogin").addEventListener('click', async ()=>{
+  const email=$("#email").value.trim();
+  const password=$("#password").value.trim();
+  $("#authMsg").textContent='מתחבר...';
+  try{
+    // ננסה להירשם, ואם קיים משתמש – נבצע התחברות
+    let { error } = await sb.auth.signUp({ email, password });
+    if(error && !String(error.message||'').includes('already registered')){
+      throw error;
+    }
+    const res = await sb.auth.signInWithPassword({ email, password });
+    if(res.error) throw res.error;
+
+    $("#authMsg").textContent='התחברות הצליחה';
+    $("#authCard").style.display='none';
+    $("#workCard").style.display='block';
+    $("#connStatus").textContent='מחובר (authenticated)';
+    await loadCustomersAll();
+  }catch(e){
+    $("#authMsg").textContent='שגיאה: '+safeMsg(e);
+    setDbg("dbgErr", safeMsg(e));
+  }
+});
+
+/* ===== יציאה ===== */
+document.getElementById('btnLogout').addEventListener('click', async ()=>{
+  try{ await sb.auth.signOut(); }catch{}
+  location.reload();
+});
+
+/* ===== קריאת לקוחות (customers) ===== */
 async function loadCustomersAll(){
   try{
+    setDbg("dbgStatus","טוען לקוחות...");
     const r = await sb.from('customers').select('customer_id,name').order('name');
     if(r.error) throw r.error;
     customers = (r.data||[]).map(x=>({customer_id:x.customer_id, name:x.name||('לקוח #'+x.customer_id)}));
     setDbg("dbgCustCount", customers.length);
-    setDbg("dbgUsableCount", customers.length);
     if(customers.length===0){
       $("#connStatus").textContent='אין רשומות בטבלת customers.';
     }else{
-      $("#connStatus").textContent=`נטענו ${customers.length} לקוחות (customers)`;
+      $("#connStatus").textContent=`נטענו ${customers.length} לקוחות`;
     }
   }catch(e){
-    $("#connStatus").textContent='שגיאה בטעינת לקוחות: '+safeMsg(e);
     setDbg("dbgErr", safeMsg(e));
-    customers=[];
+    $("#connStatus").textContent='שגיאת טעינת לקוחות: '+safeMsg(e);
   }
 }
 
-/* מודאל בחירה */
+/* ===== בחירה והצגה ===== */
 function openModal(){ $("#modalPick").style.display='flex'; $("#searchInput").value=''; $("#searchInput").focus(); renderList(customers); }
 function closeModal(){ $("#modalPick").style.display='none'; }
 $("#btnPick").addEventListener('click', openModal);
@@ -166,7 +220,7 @@ $("#btnCloseModal").addEventListener('click', closeModal);
 
 $("#searchInput").addEventListener('input', ()=>{
   const q=$("#searchInput").value.toLowerCase().trim();
-  const list = !q ? customers : customers.filter(c=> (c.name||'').toLowerCase().includes(q));
+  const list=!q?customers:customers.filter(c=>(c.name||'').toLowerCase().includes(q));
   renderList(list);
 });
 function renderList(list){
@@ -177,12 +231,11 @@ function renderList(list){
 document.getElementById('listWrap').addEventListener('click', ev=>{
   const b=ev.target.closest('button[data-id]'); if(!b) return;
   const id=b.dataset.id, nm=b.dataset.name;
-  $("#currentCustomer").value = nm;
+  $("#currentCustomer").value=nm;
   closeModal();
   openCustomer(id, nm);
 });
 
-/* פתיחת כרטיס לקוח + שליפת שוברים לפי customer_id */
 async function openCustomer(customerId, nameFromList){
   try{
     const r = await sb.from('coupons')
@@ -192,7 +245,7 @@ async function openCustomer(customerId, nameFromList){
     if(r.error) throw r.error;
 
     $("#custTitle").textContent='לקוח: '+(nameFromList||'');
-    const rows = r.data||[];
+    const rows=r.data||[];
     if(rows.length===0){
       $("#couponTable").innerHTML='<div class="hint">אין שוברים ללקוח זה.</div>';
       $("#custCard").style.display='block';
@@ -227,24 +280,13 @@ document.addEventListener('click', async ev=>{
       const nm=prompt('לבטל מימוש?\nהכנס/י שם מבטל (בעברית):'); if(!nm) return;
       if(!/[\u0590-\u05FF]/.test(nm)){ alert('נא להזין שם בעברית'); return; }
     }
-    const patch = isRed ? { redeemed:false, redeemed_at:null } : { redeemed:true, redeemed_at:new Date().toISOString() };
+    const patch=isRed?{redeemed:false,redeemed_at:null}:{redeemed:true,redeemed_at:new Date().toISOString()};
     const { error } = await sb.from('coupons').update(patch).eq('id', id);
     if(error) throw error;
     const name=$("#currentCustomer").value;
     openCustomer(cid, name);
   }catch(e){ alert('שגיאת עדכון: '+safeMsg(e)); setDbg("dbgErr", safeMsg(e)); }
 });
-
-/* יציאה */
-async function logoutApp(){
-  try{ await sb?.auth?.signOut?.(); }catch{}
-  $("#currentCustomer").value='לא נבחר';
-  $("#custCard").style.display='none';
-  document.getElementById('modalPick').style.display='none';
-  location.reload();
-}
-window.logoutApp = logoutApp;
-document.getElementById('btnLogout').addEventListener('click', logoutApp);
 </script>
 </body>
 </html>
