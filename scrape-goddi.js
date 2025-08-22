@@ -1,129 +1,195 @@
-import "dotenv/config";
+// שרץ ע"י: npm run scrape
 import { chromium } from "playwright";
-import { sb } from "./supabaseClient.js";
+import { createClient } from "@supabase/supabase-js";
+import { parse } from "node:path";
 
-const {
-  GOODI_USER,
-  GOODI_PASS,
-  SB_URL,
-  SB_SERVICE_KEY
-} = process.env;
+// ====== קלטים מתוך Secrets ======
+const GOODI_USER = process.env.GOODI_USER;
+const GOODI_PASS = process.env.GOODI_PASS;
+const SB_URL = process.env.SB_URL;
+const SB_SERVICE_KEY = process.env.SB_SERVICE_KEY;
 
-const LOGIN_URL = "https://goodi.co.il/Restaurant";
-const REPORT_TAB_SELECTOR = 'text=דוחות';
-const DATE_FROM_SELECTOR  = 'input[placeholder="מתאריך"]';
-const DATE_TO_SELECTOR    = 'input[placeholder="עד תאריך"]';
-const RUN_REPORT_SELECTOR = 'button:has-text("דוח"), input[type=button][value*="דוח"]';
+// כתובת ברירת מחדל של המערכת (אם תרצה סביבה אחרת, תוכל לשים GOODI_URL ב־secrets)
+const GOODI_URL = process.env.GOODI_URL || "https://goodi.co.il/Restaurant/";
 
-const COL_DATE  = "תאריך";
-const COL_NAME  = "שם עובד";
-const COL_TOTAL = "תשלום";
+// בדיקות בסיסיות
+function req(name, val) {
+  if (!val) throw new Error(`Missing required env: ${name}`);
+}
+req("GOODI_USER", GOODI_USER);
+req("GOODI_PASS", GOODI_PASS);
+req("SB_URL", SB_URL);
+req("SB_SERVICE_KEY", SB_SERVICE_KEY);
 
-const todayISO = () => new Date().toISOString().slice(0,10);
-const toISO = (s) => {
-  const t = String(s).trim().replaceAll('.', '/');
-  const p = t.split('/');
-  if (p.length === 3) {
-    const [dd, mm, yyyy] = p;
-    return `${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
+// חיבור ל־Supabase עם service key (עוקף RLS)
+const supabase = createClient(SB_URL, SB_SERVICE_KEY, {
+  auth: { persistSession: false },
+});
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * נסיון לזהות טבלת דוח בעמוד – עם כותרות: תאריך | שם עובד | תשלום
+ * מחזיר רשימה סטנדרטית: [{date:'dd/mm/yyyy', worker:'שם', amount: 22}, ...]
+ */
+async function extractDailyTable(page) {
+  // חיפוש כל הטבלאות בעמוד ובדיקה של שורת כותרת
+  const tables = await page.$$("table");
+  for (const t of tables) {
+    const headers = await t.$$eval("tr:first-child th, tr:first-child td", (ths) =>
+      ths.map((el) => el.innerText.trim())
+    );
+
+    // נדרש למצוא שלוש כותרות (או מאוד דומות) – אפשר טולרנטיות קלה
+    const h = headers.join("|");
+    const looksLike =
+      /תאריך/.test(h) && /שם\s*עובד/.test(h) && /תשלום/.test(h);
+
+    if (!looksLike) continue;
+
+    // שליפת כל השורות אחרי הכותרת
+    const rows = await t.$$eval("tr:not(:first-child)", (trs) =>
+      trs
+        .map((tr) =>
+          Array.from(tr.children).map((td) => td.innerText.trim())
+        )
+        .filter((cols) => cols.length >= 3)
+    );
+
+    // ניסיון לאתר את האינדקסים לפי שמות העמודות
+    const dateIdx = headers.findIndex((x) => /תאריך/.test(x));
+    const workerIdx = headers.findIndex((x) => /שם\s*עובד/.test(x));
+    const payIdx = headers.findIndex((x) => /תשלום/.test(x));
+
+    const items = rows.map((cols) => {
+      const rawDate = (cols[dateIdx] || "").trim();
+      const worker = (cols[workerIdx] || "").trim();
+      const payRaw = (cols[payIdx] || "").replace(/[^\d.,-]/g, "").replace(",", ".");
+      const amount = Number(payRaw) || 0;
+
+      // ננקה תאריך לפורמט dd/mm/yyyy אם מופיע בפורמט אחר (כמו dd.mm.yyyy)
+      let date = rawDate.replace(/\./g, "/");
+      // אם מגיע כ־yyyy-mm-dd – נהפוך
+      const m = rawDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (m) date = `${m[2]}/${m[3]}/${m[1]}`;
+
+      return { date, worker, amount };
+    });
+
+    return items.filter((x) => x.worker && x.amount > 0 && x.date);
   }
-  return s;
-};
-const parseAmount = (s) => Number(String(s).replace(/[^\d.]/g, "")) || 0;
+
+  return []; // לא נמצאה טבלה מתאימה
+}
+
+/**
+ * שמירה ל־DB:
+ * 1) יצירת לקוחות אם חסרים
+ * 2) הכנסת קופונים עם onConflict(customer_id,date) DO NOTHING
+ */
+async function saveToDb(items) {
+  if (!items.length) return { createdCustomers: 0, insertedCoupons: 0 };
+
+  // 1) שליפת כל השמות הייחודיים
+  const names = [...new Set(items.map((i) => i.worker))];
+
+  // לקוחות קיימים
+  const { data: existing, error: exErr } = await supabase
+    .from("customers")
+    .select("customer_id,name")
+    .in("name", names);
+
+  if (exErr) throw exErr;
+
+  const existingMap = new Map((existing || []).map((c) => [c.name, c.customer_id]));
+
+  // ליצור חסרים
+  const toCreate = names.filter((n) => !existingMap.has(n)).map((name) => ({ name }));
+  if (toCreate.length) {
+    const { data: created, error: cErr } = await supabase
+      .from("customers")
+      .insert(toCreate)
+      .select("customer_id,name");
+    if (cErr) throw cErr;
+    for (const c of created) existingMap.set(c.name, c.customer_id);
+  }
+
+  // 2) הכנת קופונים
+  const coupons = items.map((i) => ({
+    customer_id: existingMap.get(i.worker),
+    date: i.date,            // dd/mm/yyyy – בעמודת date שלך זה ok (סוג DATE), Supabase יפרש לפי לוקאל? אם תרצה, אפשר להפוך ל־yyyy-mm-dd.
+    amount: i.amount,
+    redeemed: false,
+    source_label: "auto:goodi",
+  }));
+
+  // מומלץ להמיר תאריכים ל־yyyy-mm-dd כדי להיות 100% בטוח:
+  const norm = (s) => {
+    // dd/mm/yyyy -> yyyy-mm-dd
+    const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    return m ? `${m[3]}-${m[2]}-${m[1]}` : s;
+  };
+  for (const c of coupons) c.date = norm(c.date);
+
+  // 3) הכנסת קופונים – בלי דריסה: ignoreDuplicates עם onConflict
+  const { data: ins, error: insErr } = await supabase
+    .from("coupons")
+    .upsert(coupons, {
+      onConflict: "customer_id,date",
+      ignoreDuplicates: true,
+    })
+    .select("id");
+
+  if (insErr) throw insErr;
+
+  return {
+    createdCustomers: toCreate.length,
+    insertedCoupons: ins ? ins.length : 0,
+  };
+}
 
 (async () => {
-  const supabase = sb(SB_URL, SB_SERVICE_KEY);
-  let rowsFound = 0, rowsInserted = 0, ok = true, notes = "";
-
   const browser = await chromium.launch({ headless: true });
-  const ctx = await browser.newContext();
-  const page = await ctx.newPage();
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
 
   try {
-    if (!GOODI_USER || !GOODI_PASS) throw new Error("חסרים GOODI_USER/GOODI_PASS");
-    if (!SB_URL || !SB_SERVICE_KEY) throw new Error("חסרים SB_URL/SB_SERVICE_KEY");
+    console.log("▶️ Opening Goodi…", GOODI_URL);
+    await page.goto(GOODI_URL, { waitUntil: "domcontentloaded", timeout: 60000 });
 
-    // login
-    await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" });
-    await page.fill('input[name="username"], input[name="user"], input[type="text"]', GOODI_USER).catch(()=>{});
-    await page.fill('input[name="password"], input[type="password"]', GOODI_PASS).catch(()=>{});
-    await page.click('text=כניסה, input[type=submit], button[type=submit]').catch(()=>{});
-    await page.waitForLoadState("domcontentloaded");
+    // === מסך התחברות ===
+    // סמנים אופייניים לפי הצילומים שנתת – אם שונים, נעדכן בהמשך:
+    const userSel = 'input[name="username"], input[type="text"]';
+    const passSel = 'input[name="password"], input[type="password"]';
+    const loginBtnSel = 'input[type="submit"], button[type="submit"], input[value="כניסה"], button:has-text("כניסה")';
 
-    // reports tab (אם זמין), קביעת תאריכים של היום
-    await page.click(REPORT_TAB_SELECTOR, { timeout: 5000 }).catch(()=>{});
-    const today = todayISO();
-    await page.fill(DATE_FROM_SELECTOR, today).catch(()=>{});
-    await page.fill(DATE_TO_SELECTOR,   today).catch(()=>{});
-    await page.click(RUN_REPORT_SELECTOR, { timeout: 5000 }).catch(()=>{});
+    await page.fill(userSel, GOODI_USER);
+    await page.fill(passSel, GOODI_PASS);
+    await page.click(loginBtnSel);
 
-    // טבלה
-    const table = await page.locator("table").first();
-    await table.waitFor({ state: "visible", timeout: 8000 }).catch(()=>{});
+    // המתנה לנווט למסך הראשי
+    await page.waitForLoadState("networkidle", { timeout: 60000 });
+    await sleep(1500);
 
-    // כותרות
-    const headers = await table.locator('thead tr th, tr:first-child th, tr:first-child td').allInnerTexts();
-    const clean = (x) => String(x).replace(/\s+/g," ").trim();
-    const cols = headers.map(clean);
-    const iDate  = cols.findIndex(c => c.includes(COL_DATE));
-    const iName  = cols.findIndex(c => c.includes(COL_NAME));
-    const iTotal = cols.findIndex(c => c.includes(COL_TOTAL));
-    if (iDate < 0 || iName < 0 || iTotal < 0) throw new Error("עמודות תאריך/שם עובד/תשלום לא נמצאו");
-
-    // שורות
-    const trs = await table.locator("tbody tr").all();
-    const records = [];
-    for (const tr of trs) {
-      const tds = (await tr.locator("td").allInnerTexts()).map(clean);
-      if (!tds.length) continue;
-      const date = toISO(tds[iDate] || "");
-      const name = tds[iName] || "";
-      const amount = parseAmount(tds[iTotal] || "0");
-      if (date && name && amount) records.push({ date, name, amount });
-    }
-    rowsFound = records.length;
-
-    // כתיבה ל-DB
-    for (const r of records) {
-      // לקוח
-      const { data: c1 } = await supabase.from("customers")
-        .select("customer_id").eq("name", r.name).maybeSingle();
-
-      let customer_id = c1?.customer_id;
-      if (!customer_id) {
-        const { data: c2, error: e2 } = await supabase
-          .from("customers")
-          .insert({ name: r.name })
-          .select("customer_id")
-          .single();
-        if (e2) throw e2;
-        customer_id = c2.customer_id;
-      }
-
-      // שובר – לא לעדכן אם קיים (מניעת כפילות)
-      const { error: e3 } = await supabase.from("coupons")
-        .insert({ customer_id, date: r.date, amount: r.amount, redeemed: false })
-        .onConflict("customer_id, date").ignore();
-
-      if (!e3) rowsInserted++;
-      else if (!/duplicate key/i.test(String(e3.message))) throw e3;
+    // אם צריך לעבור ללשונית "דוחות" – ננסה לאתר כפתור כזה:
+    const reportsTab = await page.locator('text=דוחות').first();
+    if (await reportsTab.count()) {
+      await reportsTab.click();
+      await page.waitForLoadState("networkidle");
+      await sleep(1000);
     }
 
-    notes = "finished normally";
-    console.log(`OK. found=${rowsFound}, inserted=${rowsInserted}`);
+    // חילוץ טבלה (אם היום אין תנועות – יוחזר ריק וזה תקין)
+    const items = await extractDailyTable(page);
+    console.log(`📄 found ${items.length} rows from page`);
+
+    // שמירה ל־DB
+    const res = await saveToDb(items);
+    console.log(`✅ DB done: createdCustomers=${res.createdCustomers}, insertedCoupons=${res.insertedCoupons}`);
+
   } catch (err) {
-    ok = false;
-    notes = String(err?.message || err);
-    console.error("ERROR:", notes);
+    console.error("❌ SCRAPE ERROR:", err.message || err);
+    process.exitCode = 1;
   } finally {
-    // לוג לטבלה
-    await sb(SB_URL, SB_SERVICE_KEY).from("import_logs").insert([{
-      rows_found: rowsFound,
-      rows_inserted: rowsInserted,
-      ok,
-      notes
-    }]);
     await browser.close();
-    process.exit(ok ? 0 : 1);
   }
 })();
