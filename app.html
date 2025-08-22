@@ -85,20 +85,24 @@ thead th{position:sticky;top:64px;background:#fff}
 
 <div class="container" id="app" style="display:none">
 
-  <!-- פס פעולה ראשי: בחירת לקוח -->
+  <!-- פס פעולה ראשי: קודם כפתורים (בחר לקוח / יציאה), מתחת שם הלקוח -->
   <div class="card">
     <div class="row" style="align-items:end">
-      <div class="col">
-        <label>לקוח נוכחי</label>
-        <input id="currentCustomer" placeholder="לא נבחר" disabled/>
-      </div>
       <div class="col" style="flex:0 0 220px">
         <button id="btnPick" class="primary">בחר לקוח</button>
       </div>
       <div class="col" style="flex:0 0 160px">
-        <button id="btnReload" title="רענן רשימת לקוחות">רענן לקוחות</button>
+        <button id="btnLogout" class="warn">יציאה</button>
       </div>
     </div>
+
+    <div class="row" style="margin-top:10px">
+      <div class="col">
+        <label>לקוח נוכחי</label>
+        <input id="currentCustomer" placeholder="לא נבחר" disabled/>
+      </div>
+    </div>
+
     <div id="connStatus" class="hint" style="margin-top:8px">מחבר…</div>
   </div>
 
@@ -133,7 +137,7 @@ thead th{position:sticky;top:64px;background:#fff}
 <script>
 /* ===== הגדרות כניסה בסיסיות =====
    שנה כאן את המשתמש/סיסמה איך שבא לך.
-   הערה: זו לא אבטחה חזקה (הכל בצד-לקוח). לפתרון אמיתי – עדיף לארח ב-Vercel/Netlify/Cloudflare Access.
+   הערה: זו לא אבטחה חזקה (הכל בצד-לקוח). לפתרון אמיתי – עדיף Vercel/Netlify/Cloudflare Access.
 */
 const BASIC_USER = "admin";
 const BASIC_PASS = "1234";
@@ -150,13 +154,18 @@ const DEFAULT_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIs
 let supabase=null, customersCache=[], customersLoaded=false;
 
 /* ===== GATE ===== */
-function gateOk(){
-  return localStorage.getItem('app_gate_ok')==='1';
+function gateOk(){ return localStorage.getItem('app_gate_ok')==='1'; }
+function showApp(){ $('#gate').style.display='none'; $('#app').style.display='block'; }
+async function logout(){
+  try{ await supabase?.auth?.signOut?.(); }catch{}
+  localStorage.removeItem('app_gate_ok');
+  $('#currentCustomer').value='לא נבחר';
+  $('#custCard').style.display='none';
+  $('#modalPick').style.display='none';
+  $('#gateUser').value=''; $('#gatePass').value=''; $('#gateMsg').textContent='';
+  $('#app').style.display='none'; $('#gate').style.display='flex';
 }
-function showApp(){
-  $('#gate').style.display='none';
-  $('#app').style.display='block';
-}
+
 $('#gateBtn').addEventListener('click', ()=>{
   const u=$('#gateUser').value.trim(), p=$('#gatePass').value;
   if(u===BASIC_USER && p===BASIC_PASS){
@@ -184,7 +193,6 @@ async function init(){
   }
 }
 document.addEventListener('supabase-ready', ()=>{
-  // אם עברו Gate – נטען; אם לא, נזכור לרוץ אחרי ההתחברות
   if(gateOk()) init(); else window._readyAfterGate = init;
 });
 
@@ -204,7 +212,7 @@ function closeModal(){ $('#modalPick').style.display='none'; }
 $('#btnPick').addEventListener('click', openModal);
 $('#btnCloseModal').addEventListener('click', closeModal);
 $('#btnClose').addEventListener('click', ()=>{ $('#custCard').style.display='none'; $('#currentCustomer').value='לא נבחר'; });
-$('#btnReload').addEventListener('click', ()=> loadCustomers(true));
+$('#btnLogout').addEventListener('click', logout);
 
 $('#searchInput').addEventListener('input', ()=>{
   const q=$('#searchInput').value.toLowerCase().trim();
@@ -212,7 +220,7 @@ $('#searchInput').addEventListener('input', ()=>{
   renderList(list);
 });
 
-// האצלת אירועים – תופס כפתורים שנוצרים דינמית
+// האצלת אירועים – תופס כפתורים שנוצרים דינאמית
 $('#listWrap').addEventListener('click', (ev)=>{
   const btn = ev.target.closest('button[data-id]');
   if(!btn) return;
