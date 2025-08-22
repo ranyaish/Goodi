@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>גודי שוברים - מערכת ניהול</title>
 
-<!-- טעינת supabase-js עם Fallback + אירוע מוכן -->
+<!-- supabase-js עם Fallback -->
 <script>
 (function loadSupabase(){
   const urls=[
@@ -36,7 +36,6 @@ input{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);ba
 button{cursor:pointer;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--text);padding:10px 14px}
 button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
 button.small{padding:6px 10px;font-size:13px}
-.row{display:flex;gap:12px;flex-wrap:wrap}
 table{width:100%;border-collapse:collapse;margin-top:10px}
 th,td{padding:8px;border-bottom:1px solid var(--line);text-align:right}
 thead th{background:#f8fafc;position:sticky;top:64px}
@@ -53,19 +52,17 @@ thead th{background:#f8fafc;position:sticky;top:64px}
 </head>
 <body>
 <header>
-  <!-- שמור את קובץ הלוגו בשם logo.png ליד הקובץ -->
+  <!-- שים את קובץ הלוגו בשם logo.png באותה תיקייה -->
   <img src="logo.png" alt="לוגו">
   <h2 style="margin:0">גודי שוברים - מערכת ניהול</h2>
   <div style="flex:1"></div>
-  <button id="btnLogout" class="small" title="יציאה" onclick="logoutApp()">יציאה</button>
+  <button id="btnLogout" type="button" class="small" title="יציאה">יציאה</button>
 </header>
 
 <div class="container">
-
-  <!-- כפתור בחירה מעל שם הלקוח -->
   <div class="card">
     <div style="margin-bottom:10px">
-      <button id="btnPick" class="primary">בחר לקוח</button>
+      <button id="btnPick" type="button" class="primary">בחר לקוח</button>
     </div>
     <label>לקוח נוכחי</label>
     <input id="currentCustomer" placeholder="לא נבחר" disabled/>
@@ -76,7 +73,6 @@ thead th{background:#f8fafc;position:sticky;top:64px}
     <h3 id="custTitle" style="margin:0 0 6px 0">לקוח</h3>
     <div id="couponTable"></div>
   </div>
-
 </div>
 
 <!-- מודאל בחירת לקוח -->
@@ -85,7 +81,7 @@ thead th{background:#f8fafc;position:sticky;top:64px}
     <h3 style="margin:0 0 8px 0">בחר לקוח</h3>
     <input id="searchInput" placeholder="חפש לקוח…" style="width:100%;margin-bottom:10px;padding:10px;border:1px solid var(--line);border-radius:10px"/>
     <div id="listWrap" class="list"></div>
-    <div style="text-align:left;margin-top:8px"><button id="btnCloseModal" class="small">סגור</button></div>
+    <div style="text-align:left;margin-top:8px"><button id="btnCloseModal" type="button" class="small">סגור</button></div>
   </div>
 </div>
 
@@ -99,112 +95,115 @@ const safeMsg=e=>(e&&(e.message||e.statusText||e.name))||String(e||'Unknown');
 /* ===== Supabase ===== */
 const SB_URL  = "https://ylqpxwgchwalcblfipsu.supabase.co";
 const SB_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM";
+
 let sb=null, customers=[];
 
 /* אתחול כאשר הספרייה מוכנה */
+document.addEventListener('supabase-ready', init);
 async function init(){
   try{
     if(!window.supabase){ $('#connStatus').textContent='ספריית Supabase לא נטענה'; return; }
     sb = window.supabase.createClient(SB_URL, SB_ANON);
-    const { error } = await sb.auth.getSession(); // בדיקת חיבור
+    const { error } = await sb.auth.getSession();
     $('#connStatus').textContent = error ? ('שגיאה: '+error.message) : 'מחובר ל-Supabase';
     await loadCustomers();
   }catch(e){
     $('#connStatus').textContent='שגיאת חיבור: '+safeMsg(e);
   }
 }
-document.addEventListener('supabase-ready', init);
 
-/* טעינת לקוחות – customers, ואם ריק: distinct name מה-coupons */
+/* טעינת לקוחות:
+   1) אוספים customer_id ייחודיים מתוך coupons
+   2) מביאים עבורם name מטבלת customers
+*/
 async function loadCustomers(){
   try{
-    const { data, error } = await sb.from('customers').select('customer_id,name').order('name');
-    if(error){ $('#connStatus').textContent='שגיאה בטעינת לקוחות: '+safeMsg(error); return; }
-    customers = data||[];
-    if(customers.length===0){
-      // fallback: שמות ייחודיים מתוך coupons
-      const res = await sb.from('coupons').select('name').order('name').limit(10000);
-      if(res.error){ $('#connStatus').textContent='שגיאה בטעינת שמות מ-coupons: '+safeMsg(res.error); }
-      const uniq = [];
-      const seen = new Set();
-      (res.data||[]).forEach(r=>{
-        const n=(r.name||'').trim();
-        if(n && !seen.has(n)){ seen.add(n); uniq.push({customer_id:null, name:n}); }
-      });
-      customers = uniq;
-      if(customers.length===0){
-        $('#connStatus').textContent='אין לקוחות (customers ריק ו־coupons ללא שמות).';
-      }else{
-        $('#connStatus').textContent=`נטענו ${customers.length} לקוחות (מתוך coupons)`;
-      }
-    }else{
-      $('#connStatus').textContent=`נטענו ${customers.length} לקוחות`;
+    // שלב 1: customer_id ייחודי מתוך coupons
+    const idsRes = await sb
+      .from('coupons')
+      .select('customer_id')
+      .not('customer_id','is',null);
+    if(idsRes.error){ throw idsRes.error; }
+
+    const ids = [...new Set((idsRes.data||[]).map(r=>r.customer_id))];
+    if(ids.length===0){
+      $('#connStatus').textContent='אין לקוחות (customers ריק ו־coupons ללא רשומות).';
+      customers = [];
+      return;
     }
+
+    // שלב 2: שמות מתוך customers
+    const namesRes = await sb
+      .from('customers')
+      .select('customer_id,name')
+      .in('customer_id', ids);
+    if(namesRes.error){ throw namesRes.error; }
+
+    const map = new Map(namesRes.data.map(r=>[String(r.customer_id), r.name||('לקוח #'+r.customer_id)]));
+    customers = ids.map(id=>({customer_id:id, name: map.get(String(id)) || ('לקוח #'+id)}))
+                   .sort((a,b)=>a.name.localeCompare(b.name,'he'));
+
+    $('#connStatus').textContent = `נטענו ${customers.length} לקוחות`;
   }catch(e){
-    $('#connStatus').textContent='שגיאה בטעינת לקוחות: '+safeMsg(e);
+    $('#connStatus').textContent = 'שגיאה בטעינת לקוחות: '+safeMsg(e);
+    customers = [];
   }
 }
 
 /* מודאל בחירה */
-function openModal(){ $('#modalPick').style.display='flex'; $('#searchInput').value=''; $('#searchInput').focus(); renderList(customers); }
+function openModal(){
+  $('#modalPick').style.display='flex';
+  $('#searchInput').value='';
+  $('#searchInput').focus();
+  renderList(customers);
+}
 function closeModal(){ $('#modalPick').style.display='none'; }
-$('#btnPick').onclick=openModal; $('#btnCloseModal').onclick=closeModal;
+$('#btnPick').addEventListener('click', openModal);
+$('#btnCloseModal').addEventListener('click', closeModal);
 
-$('#searchInput').oninput=()=>{
+$('#searchInput').addEventListener('input', ()=>{
   const q=$('#searchInput').value.toLowerCase().trim();
-  const list=!q?customers:customers.filter(c=>c.name.toLowerCase().includes(q));
+  const list = !q ? customers : customers.filter(c=> (c.name||'').toLowerCase().includes(q));
   renderList(list);
-};
+});
 function renderList(list){
   const el=$('#listWrap');
   if(!list.length){ el.innerHTML='<div style="padding:10px;color:#666">לא נמצאו לקוחות</div>'; return; }
-  el.innerHTML=list.map(c=>`<button type="button" data-id="${c.customer_id??''}" data-name="${c.name}">${c.name}</button>`).join('');
+  el.innerHTML=list.map(c=>`<button type="button" data-id="${c.customer_id}" data-name="${c.name}">${c.name}</button>`).join('');
 }
 document.getElementById('listWrap').addEventListener('click', ev=>{
-  const b=ev.target.closest('button[data-name]'); if(!b) return;
-  $('#currentCustomer').value=b.dataset.name; closeModal();
-  openCustomer(b.dataset.id || null, b.dataset.name);
+  const b=ev.target.closest('button[data-id]'); if(!b) return;
+  const id=b.dataset.id, nm=b.dataset.name;
+  $('#currentCustomer').value = nm;
+  closeModal();
+  openCustomer(id, nm);
 });
 
-/* פתיחת כרטיס לקוח + שליפת שוברים */
+/* פתיחת כרטיס לקוח + שליפת שוברים לפי customer_id */
 async function openCustomer(customerId, nameFromList){
   try{
-    let rows=[], err=null;
-
-    if(customerId){ // ננסה לפי customer_id אם קיים
-      const r = await sb.from('coupons')
-        .select('id,date,amount,redeemed,redeemed_at')
-        .eq('customer_id', customerId)
-        .order('date',{ascending:false});
-      err=r.error; rows=r.data||[];
-    }
-
-    if(!customerId || !rows.length){
-      // נשלוף לפי name
-      const r2 = await sb.from('coupons')
-        .select('id,date,amount,redeemed,redeemed_at')
-        .eq('name', nameFromList)
-        .order('date',{ascending:false});
-      if(r2.error) throw r2.error;
-      rows = r2.data||[];
-    }else if(err){ throw err; }
+    const r = await sb.from('coupons')
+      .select('id,date,amount,redeemed,redeemed_at')
+      .eq('customer_id', customerId)
+      .order('date',{ascending:false});
+    if(r.error) throw r.error;
 
     $('#custTitle').textContent='לקוח: '+(nameFromList||'');
-    if(!rows.length){
+    const rows = r.data||[];
+    if(rows.length===0){
       $('#couponTable').innerHTML='<div class="hint">אין שוברים ללקוח זה.</div>';
       $('#custCard').style.display='block';
       return;
     }
-
     let html='<table><thead><tr><th>תאריך</th><th>סכום</th><th>סטטוס</th><th>פעולה</th></tr></thead><tbody>';
-    rows.forEach(r=>{
-      const status = r.redeemed ? `✔️ <span class="badge">${r.redeemed_at? new Date(r.redeemed_at).toLocaleString('he-IL'):''}</span>` : '❌';
-      const label  = r.redeemed ? 'בטל מימוש' : 'סמן כמומש';
+    rows.forEach(x=>{
+      const status = x.redeemed ? `✔️ <span class="badge">${x.redeemed_at? new Date(x.redeemed_at).toLocaleString('he-IL'):''}</span>` : '❌';
+      const label  = x.redeemed ? 'בטל מימוש' : 'סמן כמומש';
       html+=`<tr>
-        <td>${isoToDDMMYYYY(r.date)}</td>
-        <td>${fmtILS(r.amount)}</td>
+        <td>${isoToDDMMYYYY(x.date)}</td>
+        <td>${fmtILS(x.amount)}</td>
         <td>${status}</td>
-        <td><button class="toggle" data-id="${r.id}" data-state="${r.redeemed?1:0}">${label}</button></td>
+        <td><button type="button" class="toggle" data-id="${x.id}" data-state="${x.redeemed?1:0}" data-cid="${customerId}">${label}</button></td>
       </tr>`;
     });
     html+='</tbody></table>';
@@ -218,7 +217,7 @@ async function openCustomer(customerId, nameFromList){
 /* שינוי סטטוס מימוש */
 document.addEventListener('click', async ev=>{
   const b=ev.target.closest('button.toggle'); if(!b) return;
-  const id=parseInt(b.dataset.id,10), isRed=b.dataset.state==='1';
+  const id=parseInt(b.dataset.id,10), isRed=b.dataset.state==='1', cid=b.dataset.cid;
   try{
     if(isRed){
       const nm=prompt('לבטל מימוש?\nהכנס/י שם מבטל (בעברית):'); if(!nm) return;
@@ -229,23 +228,24 @@ document.addEventListener('click', async ev=>{
     if(error) throw error;
     // רענון הכרטיס
     const name=$('#currentCustomer').value;
-    openCustomer(null, name);
+    openCustomer(cid, name);
   }catch(e){ alert('שגיאת עדכון: '+safeMsg(e)); }
 });
 
-/* יציאה */
+/* יציאה – עובד בוודאות */
 async function logoutApp(){
   try{ await sb?.auth?.signOut?.(); }catch{}
-  // אם תרצה למחוק גם URL/KEY מותאמים אישית:
+  // אם בעתיד תשמור URL/KEY מותאמים:
   // localStorage.removeItem('sb_url'); localStorage.removeItem('sb_key');
-  // ניקוי מסך בלי רענון:
+  // איפוס UI:
   $('#currentCustomer').value='לא נבחר';
   $('#custCard').style.display='none';
   document.getElementById('modalPick').style.display='none';
-  // רענון מלא כדי לאפס מצב (הכי בטוח במוביל):
+  // רענון מלא (בטוח במוביל):
   location.reload();
 }
-document.getElementById('btnLogout').addEventListener('click', logoutApp);
+window.logoutApp = logoutApp;                            // בטוח ל-inline handler
+document.getElementById('btnLogout').addEventListener('click', logoutApp); // וגם מאזין JS
 </script>
 </body>
 </html>
