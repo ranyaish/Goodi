@@ -1,14 +1,15 @@
 name: Goodi Daily Import
 
 on:
-  # הרצה ידנית מה-UI
   workflow_dispatch: {}
-  # תזמון אוטומטי: 11:00 ו-20:00 UTC (≈ 14:00 ו-23:00 בישראל בקיץ)
   schedule:
-    - cron: "0 11 * * *"
-    - cron: "0 20 * * *"
+    - cron: "0 11 * * *"   # 14:00 Asia/Jerusalem (DST)
+    - cron: "0 20 * * *"   # 23:00 Asia/Jerusalem (DST)
 
-# מונע חפיפה אם ריצה אחת עדיין נמשכת
+# חייבים כדי לאפשר commit לקובץ .wf-last.json
+permissions:
+  contents: write
+
 concurrency:
   group: goodi-daily-import
   cancel-in-progress: false
@@ -21,6 +22,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # מביא היסטוריה מלאה כדי לאפשר קומיט
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -40,25 +43,27 @@ jobs:
           SB_URL: ${{ secrets.SB_URL }}
           SB_SERVICE_KEY: ${{ secrets.SB_SERVICE_KEY }}
         run: |
-          node scrape-goddi.js > .scrape.log 2>&1
+          node scrape-goddi.js > .scrape.log 2>&1 || true
+          # לא מפיל את ה-job גם אם הסקריפט נכשל; הסטטוס יופיע בלוג למטה
 
-      # בונים JSON תקציר של הריצה (תמיד רץ, גם אם נכשל)
       - name: Build last-run JSON
         if: always()
         run: |
           ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          # אם השלב הקודם זרק שגיאה, outcome יהיה failure; אחרת success
           status="${{ steps.scrape.outcome }}"
           cat > .wf-last.json <<EOF
           {
-            "run_number": ${{ github.run_number }},
+            "run_number": ${GITHUB_RUN_NUMBER},
             "event": "${{ github.event_name }}",
             "status": "${status}",
             "created_at": "${ts}",
             "url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           }
           EOF
+          echo "Built .wf-last.json:"
+          cat .wf-last.json
 
-      # מקמיטים את הקובץ לריפו (ל-main)
       - name: Commit last-run JSON
         if: always()
         uses: EndBug/add-and-commit@v9
