@@ -105,6 +105,27 @@
 <!-- ==== /סוף הלוג ==== -->
 
 
+<div id="workflow-log" style="background:#f9f9f9;padding:10px;margin:10px 0;border:1px solid #ddd;border-radius:6px;font-size:14px;font-family:monospace;white-space:pre-line">
+  טוען לוג ריצות אוטומציה...
+</div>
+<script>
+(async () => {
+  const res = await fetch("https://api.github.com/repos/ranyaish/Goodi/actions/workflows/goodi.yml/runs?per_page=5", {
+    headers: { "Accept": "application/vnd.github+json" }
+  });
+  const data = await res.json();
+  const runs = data.workflow_runs || [];
+  const box = document.getElementById("workflow-log");
+  if (!runs.length) {
+    box.textContent = "לא נמצאו ריצות אוטומציה.";
+    return;
+  }
+  box.innerHTML = runs.map(r =>
+    `#${r.run_number} ${r.status} (${r.conclusion || "-"})\nעודכן: ${new Date(r.updated_at).toLocaleString("he-IL")}`
+  ).join("\n\n");
+})();
+</script>
+
 
 <!doctype html>
 <html lang="he" dir="rtl">
