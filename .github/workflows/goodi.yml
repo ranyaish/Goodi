@@ -1,12 +1,14 @@
-# .github/workflows/goodi.yml
 name: Goodi Daily Import
 
 on:
+  # הרצה ידנית מה-UI
   workflow_dispatch: {}
+  # תזמון אוטומטי: 11:00 ו-20:00 UTC (≈ 14:00 ו-23:00 בישראל בקיץ)
   schedule:
     - cron: "0 11 * * *"
     - cron: "0 20 * * *"
 
+# מונע חפיפה אם ריצה אחת עדיין נמשכת
 concurrency:
   group: goodi-daily-import
   cancel-in-progress: false
@@ -31,19 +33,35 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Run scraper
+        id: scrape
         env:
-          GOODI_URL: ${{ secrets.GOODI_URL }}
           GOODI_USER: ${{ secrets.GOODI_USER }}
           GOODI_PASS: ${{ secrets.GOODI_PASS }}
           SB_URL: ${{ secrets.SB_URL }}
           SB_SERVICE_KEY: ${{ secrets.SB_SERVICE_KEY }}
-        run: npm run scrape
+        run: |
+          node scrape-goddi.js > .scrape.log 2>&1
 
-      - name: Upload artifacts (screenshots/html/json)
+      # בונים JSON תקציר של הריצה (תמיד רץ, גם אם נכשל)
+      - name: Build last-run JSON
         if: always()
-        uses: actions/upload-artifact@v4
+        run: |
+          ts=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          status="${{ steps.scrape.outcome }}"
+          cat > .wf-last.json <<EOF
+          {
+            "run_number": ${{ github.run_number }},
+            "event": "${{ github.event_name }}",
+            "status": "${status}",
+            "created_at": "${ts}",
+            "url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          }
+          EOF
+
+      # מקמיטים את הקובץ לריפו (ל-main)
+      - name: Commit last-run JSON
+        if: always()
+        uses: EndBug/add-and-commit@v9
         with:
-          name: goodi-artifacts
-          path: artifacts/**
-          if-no-files-found: ignore
-          retention-days: 10
+          add: ".wf-last.json"
+          message: "chore(ci): update last run summary [skip ci]"
