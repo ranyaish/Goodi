@@ -5,118 +5,221 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>גודי שוברים - מערכת ניהול</title>
 
-<script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<!-- טעינת supabase-js עם Fallback + אירוע מוכן -->
+<script>
+(function loadSupabase(){
+  const urls=[
+    "https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js",
+    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/supabase-js/2.45.4/supabase.min.js"
+  ];
+  (function go(i){
+    if(i>=urls.length){ window.__supabaseLoaded=true; document.dispatchEvent(new Event("supabase-ready")); return; }
+    const s=document.createElement("script"); s.src=urls[i]; s.async=true;
+    s.onload=()=>{ window.__supabaseLoaded=true; document.dispatchEvent(new Event("supabase-ready")); };
+    s.onerror=()=>go(i+1);
+    document.head.appendChild(s);
+  })(0);
+})();
+</script>
 
 <style>
-body{margin:0;background:#fff;color:#0f172a;font-family:system-ui,Heebo,Arial}
-header{display:flex;align-items:center;gap:12px;position:sticky;top:0;background:#fff;padding:12px 16px;border-bottom:1px solid #e5e7eb;z-index:10}
-header img{height:40px}
+:root{--line:#e5e7eb;--text:#0f172a;--muted:#5b6b7a;--blue:#0ea5e9}
+*{box-sizing:border-box}
+body{margin:0;background:#fff;color:var(--text);font-family:system-ui,Heebo,Arial}
+header{display:flex;align-items:center;gap:12px;position:sticky;top:0;background:#fff;padding:12px 16px;border-bottom:1px solid var(--line);z-index:10}
+header img{height:42px;width:auto}
 .container{max-width:860px;margin:20px auto;padding:0 16px}
-.card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:14px;margin-bottom:12px}
-button{cursor:pointer;padding:8px 12px;border-radius:8px;border:1px solid #e5e7eb;background:#fff}
-button.primary{background:#0ea5e9;color:#fff;border-color:#0ea5e9}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+label{display:block;color:var(--muted);font-size:14px;margin-bottom:6px}
+input{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--text)}
+button{cursor:pointer;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--text);padding:10px 14px}
+button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
 button.small{padding:6px 10px;font-size:13px}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.col{flex:1 1 260px}
 table{width:100%;border-collapse:collapse;margin-top:10px}
-th,td{padding:8px;border-bottom:1px solid #e5e7eb;text-align:right}
-thead th{background:#f9fafb;position:sticky;top:64px}
-.badge{padding:2px 8px;border:1px solid #e5e7eb;border-radius:999px;font-size:12px}
+th,td{padding:8px;border-bottom:1px solid var(--line);text-align:right}
+thead th{background:#f8fafc;position:sticky;top:64px}
+.badge{padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:12px}
+.hint{color:var(--muted);font-size:13px}
+
+/* מודאל */
+.modal-b{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:9999}
+.modal{background:#fff;border:1px solid var(--line);border-radius:14px;max-width:460px;width:92%;padding:14px}
+.list{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.list button{display:block;width:100%;text-align:right;border:0;border-bottom:1px solid var(--line);background:#fff;padding:10px}
+.list button:last-child{border-bottom:0}
 </style>
 </head>
 <body>
 <header>
-  <img src="logo.png" alt="לוגו"/> <!-- כאן תשמור את הקובץ בשם logo.png באותה תיקייה -->
+  <!-- שים את התמונה בתיקייה וקרא לה logo.png -->
+  <img src="logo.png" alt="לוגו">
   <h2 style="margin:0">גודי שוברים - מערכת ניהול</h2>
   <div style="flex:1"></div>
-  <button id="btnLogout" class="small">יציאה</button>
+  <button id="btnLogout" class="small" title="יציאה">יציאה</button>
 </header>
 
 <div class="container">
 
+  <!-- כפתור בחירה מעל שם הלקוח -->
   <div class="card">
     <div style="margin-bottom:10px">
       <button id="btnPick" class="primary">בחר לקוח</button>
     </div>
     <label>לקוח נוכחי</label>
-    <input id="currentCustomer" disabled placeholder="לא נבחר"/>
-    <div id="connStatus" style="margin-top:8px;font-size:13px;color:#666">מחבר…</div>
+    <input id="currentCustomer" placeholder="לא נבחר" disabled/>
+    <div id="connStatus" class="hint" style="margin-top:8px">מחבר…</div>
   </div>
 
   <div class="card" id="custCard" style="display:none">
-    <h3 id="custTitle">לקוח</h3>
+    <h3 id="custTitle" style="margin:0 0 6px 0">לקוח</h3>
     <div id="couponTable"></div>
   </div>
 
 </div>
 
 <!-- מודאל בחירת לקוח -->
-<div id="modalPick" style="position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:9999">
-  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:14px;max-width:460px;width:90%;padding:14px">
-    <h3>בחר לקוח</h3>
-    <input id="searchInput" placeholder="חפש…" style="width:100%;margin-bottom:10px;padding:8px;border:1px solid #e5e7eb;border-radius:8px"/>
-    <div id="listWrap" style="max-height:360px;overflow:auto;border:1px solid #e5e7eb;border-radius:8px"></div>
-    <div style="text-align:left;margin-top:8px"><button id="btnCloseModal">סגור</button></div>
+<div id="modalPick" class="modal-b" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h3 style="margin:0 0 8px 0">בחר לקוח</h3>
+    <input id="searchInput" placeholder="חפש לקוח…" style="width:100%;margin-bottom:10px;padding:10px;border:1px solid var(--line);border-radius:10px"/>
+    <div id="listWrap" class="list"></div>
+    <div style="text-align:left;margin-top:8px"><button id="btnCloseModal" class="small">סגור</button></div>
   </div>
 </div>
 
 <script>
-const DEFAULT_URL="https://ylqpxwgchwalcblfipsu.supabase.co";
-const DEFAULT_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM";
+/* ===== Utils ===== */
+const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+const fmtILS=n=>new Intl.NumberFormat('he-IL',{style:'currency',currency:'ILS'}).format(Number(n||0));
+const isoToDDMMYYYY=iso=>{ if(!iso) return ''; const [y,m,d]=String(iso).split('-'); return `${d.padStart(2,'0')}/${m.padStart(2,'0')}/${y}`; };
+const safeMsg=e=>(e&&(e.message||e.statusText||e.name))||String(e||'Unknown');
 
-let supabase=null, customersCache=[];
+/* ===== Supabase ===== */
+const SB_URL  = "https://ylqpxwgchwalcblfipsu.supabase.co";
+const SB_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM";
+let sb=null, customers=[];
 
-function fmtILS(n){return new Intl.NumberFormat('he-IL',{style:'currency',currency:'ILS'}).format(Number(n||0));}
-function isoToDDMMYYYY(iso){ if(!iso) return ''; const [y,m,d]=String(iso).split('-'); return `${d.padStart(2,'0')}/${m.padStart(2,'0')}/${y}`;}
-
+/* אתחול כאשר הספרייה מוכנה */
 async function init(){
-  supabase = window.supabase.createClient(DEFAULT_URL, DEFAULT_KEY);
-  $('#connStatus').textContent='מחובר ל-Supabase';
-  await loadCustomers();
+  try{
+    if(!window.supabase){ $('#connStatus').textContent='ספריית Supabase לא נטענה'; return; }
+    sb = window.supabase.createClient(SB_URL, SB_ANON);
+    const { error } = await sb.auth.getSession(); // רק כדי לוודא חיבור
+    $('#connStatus').textContent = error ? ('שגיאה: '+error.message) : 'מחובר ל-Supabase';
+    await loadCustomers();
+  }catch(e){
+    $('#connStatus').textContent='שגיאת חיבור: '+safeMsg(e);
+  }
 }
-document.addEventListener("DOMContentLoaded", init);
+document.addEventListener('supabase-ready', init);
 
+/* טעינת לקוחות */
 async function loadCustomers(){
-  const { data, error } = await supabase.from('customers').select('customer_id,name').order('name');
-  if(error){$('#connStatus').textContent='שגיאה: '+error.message;return;}
-  customersCache=data||[];
-  $('#connStatus').textContent='נטענו '+customersCache.length+' לקוחות';
+  const { data, error } = await sb.from('customers').select('customer_id,name').order('name');
+  if(error){ $('#connStatus').textContent='שגיאה בטעינת לקוחות: '+safeMsg(error); return; }
+  customers = data||[];
+  $('#connStatus').textContent = `נטענו ${customers.length} לקוחות`;
 }
 
+/* מודאל בחירה */
+function openModal(){ $('#modalPick').style.display='flex'; $('#searchInput').value=''; $('#searchInput').focus(); renderList(customers); }
+function closeModal(){ $('#modalPick').style.display='none'; }
+$('#btnPick').onclick=openModal; $('#btnCloseModal').onclick=closeModal;
+
+$('#searchInput').oninput=()=>{
+  const q=$('#searchInput').value.toLowerCase().trim();
+  renderList(!q?customers:customers.filter(c=>c.name.toLowerCase().includes(q)));
+};
 function renderList(list){
   const el=$('#listWrap');
-  if(!list.length){el.innerHTML='<div style="padding:10px;color:#666">לא נמצאו</div>';return;}
-  el.innerHTML=list.map(c=>`<button style="display:block;width:100%;padding:8px;border:0;border-bottom:1px solid #eee;background:#fff;text-align:right" data-id="${c.customer_id}" data-name="${c.name}">${c.name}</button>`).join('');
+  if(!list.length){ el.innerHTML='<div style="padding:10px;color:#666">לא נמצאו לקוחות</div>'; return; }
+  el.innerHTML=list.map(c=>`<button type="button" data-id="${c.customer_id}" data-name="${c.name}">${c.name}</button>`).join('');
+}
+$('#listWrap').addEventListener('click', ev=>{
+  const b=ev.target.closest('button[data-id]'); if(!b) return;
+  $('#currentCustomer').value=b.dataset.name; closeModal();
+  openCustomer(b.dataset.id, b.dataset.name);
+});
+
+/* פתיחת כרטיס לקוח + שליפת שוברים */
+async function openCustomer(customerId, nameFromList){
+  try{
+    // ננסה קודם לפי customer_id, ואם אין תוצאות – נשלוף לפי name
+    let { data: rows, error } = await sb
+      .from('coupons')
+      .select('id,date,amount,redeemed,redeemed_at')
+      .eq('customer_id', customerId)
+      .order('date',{ascending:false});
+
+    if(error){ throw error; }
+    if(!rows || rows.length===0){
+      // התאמה לפי שם, למקרה שה-importer כתב רק name
+      const name = nameFromList || (customers.find(c=>String(c.customer_id)===String(customerId))?.name);
+      if(name){
+        const res2 = await sb.from('coupons')
+          .select('id,date,amount,redeemed,redeemed_at')
+          .eq('name', name)
+          .order('date',{ascending:false});
+        if(res2.error) throw res2.error;
+        rows = res2.data || [];
+      }
+    }
+
+    $('#custTitle').textContent='לקוח: '+(nameFromList || (customers.find(c=>String(c.customer_id)===String(customerId))?.name)||'');
+    if(!rows || rows.length===0){
+      $('#couponTable').innerHTML='<div class="hint">אין שוברים ללקוח זה.</div>';
+      $('#custCard').style.display='block';
+      return;
+    }
+
+    let html='<table><thead><tr><th>תאריך</th><th>סכום</th><th>סטטוס</th><th>פעולה</th></tr></thead><tbody>';
+    rows.forEach(r=>{
+      const status = r.redeemed ? `✔️ <span class="badge">${r.redeemed_at? new Date(r.redeemed_at).toLocaleString('he-IL'):''}</span>` : '❌';
+      const label  = r.redeemed ? 'בטל מימוש' : 'סמן כמומש';
+      html+=`<tr>
+        <td>${isoToDDMMYYYY(r.date)}</td>
+        <td>${fmtILS(r.amount)}</td>
+        <td>${status}</td>
+        <td><button class="toggle" data-id="${r.id}" data-state="${r.redeemed?1:0}">${label}</button></td>
+      </tr>`;
+    });
+    html+='</tbody></table>';
+    $('#couponTable').innerHTML=html;
+    $('#custCard').style.display='block';
+  }catch(e){
+    alert('שגיאת קריאה: '+safeMsg(e));
+  }
 }
 
-$('#btnPick').onclick=()=>{ $('#modalPick').style.display='flex'; renderList(customersCache); }
-$('#btnCloseModal').onclick=()=>$('#modalPick').style.display='none';
-$('#searchInput').oninput=()=>{
-  const q=$('#searchInput').value.toLowerCase();
-  const list=customersCache.filter(c=>c.name.toLowerCase().includes(q));
-  renderList(list);
-}
-$('#listWrap').onclick=ev=>{
-  const btn=ev.target.closest('button[data-id]');
-  if(!btn)return;
-  $('#currentCustomer').value=btn.dataset.name;
-  $('#modalPick').style.display='none';
-  openCustomer(btn.dataset.name);
-}
-$('#btnLogout').onclick=()=>{ location.reload(); }
+/* שינוי סטטוס מימוש */
+document.addEventListener('click', async ev=>{
+  const b=ev.target.closest('button.toggle'); if(!b) return;
+  const id=parseInt(b.dataset.id,10), isRed=b.dataset.state==='1';
+  try{
+    if(isRed){
+      const nm=prompt('לבטל מימוש?\nהכנס/י שם מבטל (בעברית):'); if(!nm) return;
+      if(!/[\u0590-\u05FF]/.test(nm)){ alert('נא להזין שם בעברית'); return; }
+    }
+    const patch = isRed ? { redeemed:false, redeemed_at:null } : { redeemed:true, redeemed_at:new Date().toISOString() };
+    const { error } = await sb.from('coupons').update(patch).eq('id', id);
+    if(error) throw error;
+    // רענון הכרטיס הנוכחי: נאתר שוב את הלקוח בשדה
+    const name=$('#currentCustomer').value;
+    const c=customers.find(x=>x.name===name);
+    openCustomer(c?.customer_id, name);
+  }catch(e){ alert('שגיאת עדכון: '+safeMsg(e)); }
+});
 
-async function openCustomer(name){
-  $('#custTitle').textContent='לקוח: '+name;
-  const { data, error } = await supabase.from('coupons').select('*').eq('name', name).order('date',{ascending:false});
-  if(error){alert('שגיאה: '+error.message);return;}
-  let html='<table><thead><tr><th>תאריך</th><th>סכום</th><th>סטטוס</th></tr></thead><tbody>';
-  (data||[]).forEach(r=>{
-    html+=`<tr><td>${isoToDDMMYYYY(r.date)}</td><td>${fmtILS(r.amount)}</td><td>${r.redeemed?'✔️':'❌'}</td></tr>`;
-  });
-  html+='</tbody></table>';
-  $('#couponTable').innerHTML=html;
-  $('#custCard').style.display='block';
-}
-
-function $(s){return document.querySelector(s);}
+/* יציאה */
+$('#btnLogout').addEventListener('click', async ()=>{
+  try{ await sb?.auth?.signOut?.(); }catch{}
+  // אם שמרת פעם URL/KEY אחרים ב-localStorage ורוצה למחוק אותם:
+  // localStorage.removeItem('sb_url'); localStorage.removeItem('sb_key');
+  location.reload();
+});
 </script>
 </body>
 </html>
