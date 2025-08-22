@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>לוג ריצה אחרונה</title>
+  <style>
+    :root{--border:#e5e7eb;--muted:#64748b}
+    body{margin:0;font-family:system-ui,Heebo,Arial,sans-serif;background:#fff;color:#111}
+    .card{border:1px solid var(--border);border-radius:12px;padding:14px}
+    .title{display:flex;gap:8px;align-items:center;margin:0 0 10px}
+    .pill{display:inline-block;border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12px;background:#f8fafc}
+    a{color:#0ea5e9;text-decoration:none}
+    a:hover{text-decoration:underline}
+    .muted{color:var(--muted);font-size:14px}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .dot{width:10px;height:10px;border-radius:50%}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="title">
+      <strong>אוטומציה – ריצה אחרונה</strong>
+      <span id="updated" class="pill">טוען…</span>
+    </div>
+    <div id="content" class="muted">מביא נתונים…</div>
+  </div>
+
+  <script>
+  async function loadLastRun(){
+    const url = "https://raw.githubusercontent.com/ranyaish/Goodi/main/.wf-last.json?cb="+Date.now();
+    const $u = document.getElementById('updated');
+    const $c = document.getElementById('content');
+    try{
+      const res = await fetch(url, { cache:'no-store' });
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const d = await res.json();
+      const when = new Date(d.created_at).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' });
+      const ok = d.status === 'success';
+      const inProg = d.status && !['success','failure','cancelled','timed_out'].includes(d.status);
+      const color = ok ? '#16a34a' : (inProg ? '#f59e0b' : '#dc2626');
+      const hebStatus = ok ? '✔️ הצלחה' : (inProg ? '⏳ בתהליך' : '❌ כשל');
+
+      $u.textContent = 'עודכן: ' + when;
+      $c.innerHTML = `
+        <div class="row">
+          <span class="dot" style="background:${color}"></span>
+          <div>
+            <div><strong>סטטוס:</strong> ${hebStatus}</div>
+            <div class="muted">אירוע: ${d.event} · ריצה #${d.run_number}</div>
+            <div style="margin-top:6px">
+              <a href="${d.url}" target="_blank" rel="noopener">פתח ב-GitHub ↗</a>
+            </div>
+          </div>
+        </div>
+      `;
+    }catch(e){
+      $u.textContent = 'שגיאה';
+      $c.textContent = 'לא מצליח לטעון את לוג הריצה האחרונה.';
+    }
+  }
+  loadLastRun();
+  </script>
+</body>
+</html>
