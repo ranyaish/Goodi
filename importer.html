@@ -3,40 +3,50 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>ייבוא שוברים מ־HTML → Supabase</title>
+<title>ייבוא שוברים מ־HTML → Supabase (מיפוי אוטומטי)</title>
+
+<!-- טעינת supabase-js עם Fallback -->
 <script>
 (function loadSupabase(){
   const urls=[
     "https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js",
-    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"
+    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/supabase-js/2.45.4/supabase.min.js"
   ];
   (function tryNext(i){
     if(i>=urls.length){document.dispatchEvent(new Event("supabase-ready"));return;}
-    const s=document.createElement("script");s.src=urls[i];s.async=true;
+    const s=document.createElement("script"); s.src=urls[i]; s.async=true;
     s.onload=()=>document.dispatchEvent(new Event("supabase-ready"));
-    s.onerror=()=>tryNext(i+1);document.head.appendChild(s);
+    s.onerror=()=>tryNext(i+1);
+    document.head.appendChild(s);
   })(0);
 })();
 </script>
+
 <style>
-:root{--bg:#0b111b;--card:#101826;--muted:#9fb3c8;--text:#e6edf6}
-*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Heebo,Arial}
+:root{--bg:#0b111b;--card:#101826;--muted:#9fb3c8;--text:#e6edf6;--green:#22c55e;--red:#ef4444}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Heebo,Arial}
 header{position:sticky;top:0;background:#0b111bcc;padding:12px 16px;border-bottom:1px solid #1f2a3a}
-.container{max-width:900px;margin:20px auto;padding:0 16px}
+.container{max-width:920px;margin:20px auto;padding:0 16px}
 .card{background:#101826;border:1px solid #1f2a3a;border-radius:14px;padding:14px;margin-bottom:12px}
 label{display:block;color:var(--muted);font-size:14px;margin-bottom:6px}
 input,button{width:100%;padding:10px;border-radius:10px;border:1px solid #2a3a52;background:#0b111b;color:var(--text)}
-button{cursor:pointer} button.primary{background:#11623a}
-.hint{color:var(--muted);font-size:13px} table{width:100%;border-collapse:collapse}
+button{cursor:pointer}
+button.primary{background:linear-gradient(180deg,#1a7f4b,#11623a)}
+.hint{color:var(--muted);font-size:13px}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.col{flex:1 1 260px}
+.ok{color:var(--green)} .bad{color:var(--red)}
+table{width:100%;border-collapse:collapse}
 th,td{padding:8px;border-bottom:1px solid #263246;text-align:right}
-.ok{color:#22c55e}.bad{color:#ef4444}
-.row{display:flex;gap:12px;flex-wrap:wrap}.col{flex:1 1 260px}
 </style>
 </head>
 <body>
-<header><div class="container"><b>ייבוא שוברים</b> — HTML → DB (מיפוי אוטומטי)</div></header>
+<header><div class="container"><b>ייבוא שוברים</b> — HTML → DB (מיפוי אוטומטי לשדות: תאריך, שם עובד, <u>תשלום</u>)</div></header>
 <div class="container">
 
+  <!-- חיבור ל-Supabase -->
   <div class="card">
     <div class="row">
       <div class="col">
@@ -51,30 +61,33 @@ th,td{padding:8px;border-bottom:1px solid #263246;text-align:right}
     <div id="connStatus" class="hint">מחבר…</div>
   </div>
 
+  <!-- קובץ HTML + פעולות -->
   <div class="card">
-    <label>קובץ HTML עם טבלה</label>
+    <label>קובץ HTML עם טבלה (כותרות לדוגמה: תאריך | שם עובד | … | תשלום | …)</label>
     <input id="fileInput" type="file" accept=".html,.htm,text/html"/>
-    <div style="margin-top:10px">
+    <div style="margin-top:10px;display:flex;gap:10px">
       <button id="btnPreview">תצוגה מקדימה</button>
       <button id="btnImport" class="primary">ייבוא ל־DB</button>
     </div>
     <div id="importStatus" class="hint" style="margin-top:8px"></div>
   </div>
 
+  <!-- תצוגה מקדימה -->
   <div class="card">
     <div id="preview"></div>
   </div>
 </div>
 
 <script>
-const $=s=>document.querySelector(s);
-
-const DEFAULT_URL="https://ylqpxwgchwalcblfipsu.supabase.co";
-const DEFAULT_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM";
-let supabase=null;
-
-function clean(t){return (t||'').replace(/[\u200e\u200f]/g,'').replace(/\s+/g,' ').trim();}
-function parseAmount(s){if(!s)return 0;s=String(s).replace(/[₪,\s]/g,'').replace(/[^0-9.\-]/g,'');const n=parseFloat(s);return isNaN(n)?0:n;}
+/* ===== Utils ===== */
+const $ = s => document.querySelector(s);
+function clean(t){ return (t||'').replace(/[\u200e\u200f]/g,'').replace(/\s+/g,' ').trim(); }
+function parseAmount(s){
+  if(!s) return 0;
+  s = String(s).replace(/[₪,\s]/g,'').replace(/[^0-9.\-]/g,'');
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
 function normDate(s){
   if(!s) return '';
   s=s.replace(/[\.]/g,'/').replace(/\s+/g,' ').trim();
@@ -84,84 +97,136 @@ function normDate(s){
   if(m){let[y,mn,d]=[m[1],m[2],m[3]]; return `${y.padStart(4,'0')}-${mn.padStart(2,'0')}-${d.padStart(2,'0')}`;}
   return s;
 }
+function fmtILS(n){ return new Intl.NumberFormat('he-IL',{style:'currency',currency:'ILS'}).format(Number(n||0)); }
 
-async function init(){
-  $('#sbUrl').value=localStorage.getItem('sb_url')||DEFAULT_URL;
-  $('#sbKey').value=localStorage.getItem('sb_key')||DEFAULT_KEY;
-  if(!window.supabase){$('#connStatus').textContent='ספריית Supabase לא נטענה';return;}
+/* ===== Supabase ===== */
+const DEFAULT_URL = "https://ylqpxwgchwalcblfipsu.supabase.co";
+const DEFAULT_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM";
+let supabase=null;
+
+async function initSupabase(){
+  $('#sbUrl').value = localStorage.getItem('sb_url') || DEFAULT_URL;
+  $('#sbKey').value = localStorage.getItem('sb_key') || DEFAULT_KEY;
+  if(!window.supabase){ $('#connStatus').textContent='ספריית Supabase לא נטענה'; return; }
   supabase = window.supabase.createClient($('#sbUrl').value.trim(), $('#sbKey').value.trim());
-  localStorage.setItem('sb_url',$('#sbUrl').value.trim());
-  localStorage.setItem('sb_key',$('#sbKey').value.trim());
-  const {error} = await supabase.auth.getSession();
+  localStorage.setItem('sb_url', $('#sbUrl').value.trim());
+  localStorage.setItem('sb_key', $('#sbKey').value.trim());
+  const { error } = await supabase.auth.getSession();
   $('#connStatus').textContent = error ? ('שגיאה: '+error.message) : 'מחובר ל-Supabase';
 }
-document.addEventListener('supabase-ready', init);
-['change','blur'].forEach(e=>{
-  $('#sbUrl').addEventListener(e, init);
-  $('#sbKey').addEventListener(e, init);
+document.addEventListener('supabase-ready', initSupabase);
+['change','blur'].forEach(evt=>{
+  $('#sbUrl').addEventListener(evt, initSupabase);
+  $('#sbKey').addEventListener(evt, initSupabase);
 });
 
+/* ===== File parsing with auto mapping (prefers "תשלום") ===== */
 let pickedRows=[];
-async function readFile(){
-  const f=$('#fileInput').files?.[0]; if(!f) return null;
-  const html=await f.text();
-  const doc=new DOMParser().parseFromString(html,'text/html');
-  const tables=Array.from(doc.querySelectorAll('table')).sort((a,b)=>b.rows.length-a.rows.length);
-  const t=tables[0]; if(!t) return null;
-  const trs=Array.from(t.querySelectorAll('tr')); if(!trs.length) return null;
-  // headers:
-  const headCells = trs[0].querySelectorAll('th').length ? Array.from(trs[0].querySelectorAll('th')) : Array.from(trs[0].children);
-  const headers = headCells.map(th=>clean(th.textContent.toLowerCase()));
-  trs.shift();
-  const rows = trs.map(tr=>Array.from(tr.children).map(td=>clean(td.textContent)));
 
-  // locate indices automatically
-  const idx = {
-    date: findIndex(headers, ['תאריך','date']),
-    name: findIndex(headers, ['שם עובד','שם לקוח','עובד','לקוח','customer','client','name']),
-    amount: findIndex(headers, ['סהכ','סכום','תשלום','amount','total','₪'])
-  };
-  pickedRows = rows.map(r=>({date:normDate(r[idx.date]||''), name:r[idx.name]||'', amount:parseAmount(r[idx.amount]||'0')}))
-                  .filter(x=>x.name && x.date);
-  return {headers, idx};
-}
-function findIndex(headers, keys){
-  for(let i=0;i<headers.length;i++){ if(keys.some(k=>headers[i].includes(k))) return i; }
+function findBestHeaderIndex(headers, wanted, {exclude=[]}={}){
+  const H = headers.map(h => h.replace(/\s+/g,' ').trim().toLowerCase());
+  const isBad = i => exclude.some(x => H[i].includes(x));
+  // 1) התאמה מדויקת
+  for(let i=0;i<H.length;i++){ if(isBad(i)) continue; if(wanted.some(w=>H[i]===w)) return i; }
+  // 2) מתחיל ב-
+  for(let i=0;i<H.length;i++){ if(isBad(i)) continue; if(wanted.some(w=>H[i].startsWith(w))) return i; }
+  // 3) מכיל
+  for(let i=0;i<H.length;i++){ if(isBad(i)) continue; if(wanted.some(w=>H[i].includes(w))) return i; }
   return 0;
 }
 
-$('#btnPreview').onclick=async ()=>{
-  const info=await readFile(); if(!info){ $('#importStatus').textContent='לא נמצאה טבלה בקובץ'; return; }
-  const sample=pickedRows.slice(0,20);
-  let html='<table><thead><tr><th>תאריך</th><th>שם עובד</th><th>סכום</th></tr></thead><tbody>';
-  sample.forEach(r=> html+=`<tr><td>${r.date}</td><td>${r.name}</td><td>${r.amount}</td></tr>`);
-  html+='</tbody></table>';
-  $('#preview').innerHTML=html;
+async function readFile(){
+  const f = $('#fileInput').files?.[0]; if(!f) return null;
+  const html = await f.text();
+  const doc  = new DOMParser().parseFromString(html,'text/html');
+  const tables = Array.from(doc.querySelectorAll('table')).sort((a,b)=>b.rows.length-a.rows.length);
+  const t = tables[0]; if(!t) return null;
+
+  const trs = Array.from(t.querySelectorAll('tr')); if(!trs.length) return null;
+  const headCells = trs[0].querySelectorAll('th').length ? Array.from(trs[0].querySelectorAll('th')) : Array.from(trs[0].children);
+  const headers = headCells.map(th=> clean(th.textContent).toLowerCase());
+  trs.shift();
+  const rows = trs.map(tr=> Array.from(tr.children).map(td=> clean(td.textContent)));
+
+  // אינדקסים אוטומטיים:
+  const idx = {
+    date:  findBestHeaderIndex(headers, ['תאריך','date']),
+    name:  findBestHeaderIndex(headers, ['שם עובד','שם לקוח','עובד','לקוח','customer','client','name']),
+    // amount: קודם כל "תשלום" — מדלג על "ללא"/"מע״מ", ואם אין — נופל ל"סה״כ"
+    amount: (function(){
+      let i = findBestHeaderIndex(
+        headers,
+        ['תשלום','payment','amount'],
+        { exclude:['ללא','מע״מ','מעמ','vat','ללא מע״מ','before vat','without'] }
+      );
+      if(i===0 && !headers[0].includes('תשלום')) {
+        i = findBestHeaderIndex(headers, ['סה"כ','סה״כ','total','grand total']);
+      }
+      return i;
+    })()
+  };
+
+  pickedRows = rows.map(r=>({
+    date:  normDate(r[idx.date]  || ''),
+    name:  r[idx.name]           || '',
+    amount:parseAmount(r[idx.amount]|| '0')
+  })).filter(x=> x.name && x.date);
+
+  return { headers, idx, totalRows: rows.length };
+}
+
+/* ===== UI actions ===== */
+$('#btnPreview').onclick = async ()=>{
+  const info = await readFile();
+  if(!info){ $('#importStatus').textContent='לא נמצאה טבלה בקובץ / כותרות לא מזוהות'; return; }
+  const sample = pickedRows.slice(0,20);
+  let html = `<div class="hint"><b>תצוגה מקדימה</b> — שורות מוצגות: ${sample.length} מתוך ${info.totalRows}</div>`;
+  html += '<div style="max-height:340px;overflow:auto"><table><thead><tr><th>תאריך</th><th>שם עובד</th><th>תשלום</th></tr></thead><tbody>';
+  sample.forEach(r=> html += `<tr><td>${r.date}</td><td>${r.name}</td><td>${fmtILS(r.amount)}</td></tr>`);
+  html += '</tbody></table></div>';
+  $('#preview').innerHTML = html;
 };
 
-$('#btnImport').onclick=async ()=>{
+$('#btnImport').onclick = async ()=>{
   try{
-    if(!supabase) await init();
+    if(!supabase) await initSupabase();
     $('#importStatus').textContent='מייבא…';
-    const info=await readFile(); if(!info){ $('#importStatus').textContent='קובץ/טבלה לא תקינים'; return; }
-    // upsert customers by name
-    const uniqueNames = Array.from(new Set(pickedRows.map(x=>x.name)));
-    const { error: cErr } = await supabase.from('customers').upsert(uniqueNames.map(n=>({name:n})), { onConflict:'name' });
-    if(cErr){ $('#importStatus').textContent='שגיאה ביצירת לקוחות: '+cErr.message; return; }
-    const { data: cust, error: gErr } = await supabase.from('customers').select('customer_id,name').in('name', uniqueNames);
-    if(gErr){ $('#importStatus').textContent='שגיאה בקריאת לקוחות: '+gErr.message; return; }
-    const idByName = Object.fromEntries(cust.map(c=>[c.name,c.customer_id]));
-    const coupons = pickedRows.map(x=>({customer_id:idByName[x.name], date:x.date, amount:x.amount, redeemed:false, source_label:'html-upload'}))
-                              .filter(x=>x.customer_id);
+    const info = await readFile();
+    if(!info){ $('#importStatus').innerHTML='<span class="bad">קובץ/טבלה לא תקינים</span>'; return; }
 
-    const chunk=500;
-    for(let i=0;i<coupons.length;i+=chunk){
-      const slice=coupons.slice(i,i+chunk);
+    // 1) upsert לקוחות לפי name
+    const uniqueNames = Array.from(new Set(pickedRows.map(x=>x.name)));
+    const { error: cErr } = await supabase.from('customers').upsert(
+      uniqueNames.map(n=>({name:n})),
+      { onConflict:'name' }
+    );
+    if(cErr){ $('#importStatus').innerHTML = '<span class="bad">שגיאה ביצירת לקוחות: '+cErr.message+'</span>'; return; }
+
+    // 2) מיפוי שם → customer_id
+    const { data: cust, error: gErr } = await supabase.from('customers')
+      .select('customer_id,name').in('name', uniqueNames);
+    if(gErr){ $('#importStatus').innerHTML = '<span class="bad">שגיאה בקריאת לקוחות: '+gErr.message+'</span>'; return; }
+    const idByName = Object.fromEntries((cust||[]).map(c=>[c.name, c.customer_id]));
+
+    // 3) בניית רשומות שוברים
+    const coupons = pickedRows
+      .map(x=>({ customer_id: idByName[x.name], date: x.date, amount: x.amount, redeemed:false, source_label:'html-upload' }))
+      .filter(x=>x.customer_id);
+
+    if(!coupons.length){ $('#importStatus').innerHTML='<span class="bad">אין רשומות חוקיות לייבוא</span>'; return; }
+
+    // 4) upsert באצוות — מניעת כפילות לפי (customer_id,date)
+    const CHUNK=500;
+    for(let i=0;i<coupons.length;i+=CHUNK){
+      const slice=coupons.slice(i,i+CHUNK);
       const { error: uErr } = await supabase.from('coupons').upsert(slice, { onConflict:'customer_id,date' });
-      if(uErr){ $('#importStatus').textContent='שגיאת ייבוא: '+uErr.message; return; }
+      if(uErr){ $('#importStatus').innerHTML = '<span class="bad">שגיאת ייבוא: '+uErr.message+'</span>'; return; }
     }
-    $('#importStatus').innerHTML='<span class="ok">הייבוא הושלם</span>';
-  }catch(e){ $('#importStatus').innerHTML='<span class="bad">שגיאה: '+(e.message||e)+'</span>'; }
+
+    $('#importStatus').innerHTML = `<span class="ok">הייבוא הושלם. נוספו/עודכנו ${coupons.length} שורות.</span>`;
+  }catch(e){
+    $('#importStatus').innerHTML = '<span class="bad">שגיאה: '+(e.message||e)+'</span>';
+  }
 };
 </script>
 </body>
