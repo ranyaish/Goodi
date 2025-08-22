@@ -4,9 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ניהול שוברים • טעינת HTML → Supabase</title>
+  <!-- ספריית Supabase -->
   <script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
   <style>
-    :root{--bg:#0b111b;--card:#101826;--muted:#9fb3c8;--text:#e6edf6;--accent:#46a758;--accent2:#3b82f6;--danger:#ef4444}
+    :root{--bg:#0b111b;--card:#101826;--muted:#9fb3c8;--text:#e6edf6;--accent:#46a758;--danger:#ef4444}
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,Segoe UI,Heebo,Arial,sans-serif;background:#0b111b;color:var(--text)}
     header{position:sticky;top:0;background:#0b111bcc;backdrop-filter:blur(10px);padding:14px 16px;border-bottom:1px solid #1f2a3a}
@@ -20,12 +21,11 @@
     button.primary{background:linear-gradient(180deg,#1a7f4b,#11623a);border-color:#125b35}
     button.secondary{background:#0b111b}
     .hint{color:var(--muted);font-size:13px;margin-top:6px}
-    table{width:100%;border-collapse:separate;border-spacing:0}
+    table{width:100%;border-collapse:collapse}
     th,td{padding:8px 10px;border-bottom:1px solid #263246;text-align:right}
     th{background:#0e1523;position:sticky;top:68px}
     .ok{color:#22c55e}.bad{color:#ef4444}
     .status{font-size:12px;color:#9fb3c8}
-    .hidden{display:none}
   </style>
 </head>
 <body>
@@ -45,13 +45,9 @@
         <label>Supabase anon key</label>
         <input id="supabaseKey" />
       </div>
-      <!-- הכפתור נשאר כמוס/לא הכרחי -->
-      <div class="col hidden" style="flex:0 0 180px;align-self:end">
-        <button id="btnConnect" class="primary">שמור חיבור</button>
-      </div>
     </div>
     <div class="status" id="connStatus">מתחבר…</div>
-    <div class="hint">חיבור נוצר אוטומטית בעת טעינת הדף ובכל שינוי בשדות.</div>
+    <div class="hint">החיבור נוצר אוטומטית בעת טעינת הדף ובכל שינוי בשדות.</div>
   </div>
 
   <!-- התחברות -->
@@ -94,7 +90,7 @@
         <button id="btnPreview" class="secondary">תצוגה מקדימה</button>
       </div>
       <div class="col" style="flex:0 0 260px;align-self:end">
-        <button id="btnImport" class="primary">ייבוא ל־DB (מניעת כפילויות)</button>
+        <button id="btnImport" class="primary">ייבוא ל־DB</button>
       </div>
     </div>
     <div id="importStatus" class="hint"></div>
@@ -127,230 +123,71 @@
 <script>
   const $ = s => document.querySelector(s);
   const $$ = s => Array.from(document.querySelectorAll(s));
-  function cleanText(t){return (t||'').replace(/[\u200e\u200f]/g,'').replace(/\s+/g,' ').trim();}
-  function parseAmount(s){ if(!s) return 0; s=String(s).replace(/[₪,\s]/g,'').replace(/[^0-9.\-]/g,''); const n=parseFloat(s); return isNaN(n)?0:n; }
-  function normalizeDate(s){ if(!s) return ''; s=s.replace(/[\.]/g,'/').replace(/\s+/g,' ').trim(); const m1=s.match(/(\d{1,2})[\/](\d{1,2})[\/](\d{2,4})/); if(m1){ let [_,d,m,y]=m1; if(y.length===2) y='20'+y; return `${y.padStart(4,'0')}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;} const m2=s.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/); if(m2){ let [_,y,m,d]=m2; return `${y.padStart(4,'0')}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;} return s; }
 
-  // ברירות מחדל (אפשר לשנות)
   const DEFAULT_SUPABASE_URL = "https://ylqpxwgchwalcblfipsu.supabase.co";
   const DEFAULT_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM";
 
   let supabase = null, currentUser = null;
   const supabaseUrlEl = $('#supabaseUrl'), supabaseKeyEl = $('#supabaseKey');
-  const authStatus = $('#authStatus'), connStatus = $('#connStatus');
+  const connStatus = $('#connStatus'), authStatus = $('#authStatus');
 
-  // יצירת לקוח Supabase
-  function initSupabaseClient(){
-    const url = (supabaseUrlEl.value || '').trim() || DEFAULT_SUPABASE_URL;
-    const key = (supabaseKeyEl.value || '').trim() || DEFAULT_ANON_KEY;
-    if(!url || !key){ connStatus.textContent = 'חסר URL או Anon Key'; return; }
-    supabase = window.Supabase.createClient(url, key);
-    localStorage.setItem('sb_url', url);
-    localStorage.setItem('sb_key', key);
-    connStatus.textContent = 'מחובר ל-Supabase';
+  async function initSupabaseClient(){
+    try {
+      connStatus.textContent = 'מתחבר…';
+      const url = (supabaseUrlEl.value || '').trim() || DEFAULT_SUPABASE_URL;
+      const key = (supabaseKeyEl.value || '').trim() || DEFAULT_ANON_KEY;
+
+      supabase = window.Supabase.createClient(url, key);
+      localStorage.setItem('sb_url', url);
+      localStorage.setItem('sb_key', key);
+
+      // בדיקת חיבור אמיתית
+      const { error } = await supabase.auth.getSession();
+      if (error) {
+        connStatus.textContent = 'שגיאת חיבור: ' + error.message;
+        console.error(error);
+        return;
+      }
+      connStatus.textContent = 'מחובר ל-Supabase';
+    } catch (e) {
+      connStatus.textContent = 'שגיאה כללית';
+      console.error(e);
+    }
   }
 
-  // טעינת ערכים + התחברות אוטומטית בזמן טעינת הדף
   function loadAndConnect(){
     supabaseUrlEl.value = localStorage.getItem('sb_url') || DEFAULT_SUPABASE_URL;
     supabaseKeyEl.value = localStorage.getItem('sb_key') || DEFAULT_ANON_KEY;
     initSupabaseClient();
   }
 
-  // התחברות (Email/Password)
+  // התחברות אימייל/סיסמה
   $('#btnSignIn').addEventListener('click', async ()=>{
-    if(!supabase){ initSupabaseClient(); }
+    if(!supabase){ await initSupabaseClient(); }
     const email = ($('#email').value || '').trim();
     const password = ($('#password').value || '').trim();
     if(!email || !password){ alert('נא למלא אימייל וסיסמה'); return; }
-    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
-    if(signInErr){
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if(error){
       const { error: signUpErr } = await supabase.auth.signUp({ email, password });
-      if(signUpErr){ authStatus.textContent = 'שגיאת התחברות/הרשמה: ' + signUpErr.message; return; }
-      authStatus.textContent = 'נרשמת. אמת/י (אם נדרש) והתחבר/י שוב.';
+      if(signUpErr){ authStatus.textContent = 'שגיאת התחברות: ' + signUpErr.message; return; }
+      authStatus.textContent = 'נרשמת. אמת/י והתחבר/י שוב.';
     } else {
-      currentUser = signInData.user;
+      currentUser = data.user;
       authStatus.textContent = 'מחובר כ-' + (currentUser?.email||'');
       refreshCustomers();
     }
   });
 
-  // חיבור מחדש אוטומטי כשמשנים URL/Key (בלי כפתור)
+  // התחברות אוטומטית בכל שינוי ב-URL/Key
   ['change','blur','input'].forEach(evt=>{
     supabaseUrlEl.addEventListener(evt, ()=>{ initSupabaseClient(); });
     supabaseKeyEl.addEventListener(evt, ()=>{ initSupabaseClient(); });
   });
 
-  // ===== HTML parsing & mapping =====
-  const fileInput = $('#fileInput'), tableSelect = $('#tableSelect');
-  const dateSelect = $('#dateSelect'), nameSelect = $('#nameSelect'), amountSelect = $('#amountSelect');
-  const btnPreview = $('#btnPreview'), btnImport = $('#btnImport'), importStatus = $('#importStatus');
-  let parsedDoc=null, tables=[], headers=[], rows=[];
-
-  fileInput.addEventListener('change', async ()=>{
-    const file = fileInput.files?.[0]; if(!file) return;
-    const text = await file.text();
-    const parser = new DOMParser();
-    parsedDoc = parser.parseFromString(text, 'text/html');
-    tables = Array.from(parsedDoc.querySelectorAll('table')).sort((a,b)=>b.rows.length - a.rows.length);
-    tableSelect.innerHTML='';
-    tables.forEach((t,i)=> tableSelect.add(new Option(`טבלה #${i+1} — ${t.rows.length} שורות`, i)));
-    tableSelect.value = '0';
-    prepareMapping();
-  });
-
-  tableSelect.addEventListener('change', prepareMapping);
-
-  function prepareMapping(){
-    const t = tables[parseInt(tableSelect.value||'0',10)]; if(!t) return;
-    const trs = Array.from(t.querySelectorAll('tr')); if(trs.length===0){ headers=[]; rows=[]; return; }
-    const first = trs[0];
-    const maybeTh = first.querySelectorAll('th');
-    let headCells = maybeTh.length>0 ? Array.from(maybeTh) : Array.from(first.children);
-    trs.shift();
-    headers = headCells.map(th=>cleanText(th.textContent));
-    rows = trs.map(tr=> Array.from(tr.children).map(td=> cleanText(td.textContent)));
-
-    [dateSelect,nameSelect,amountSelect].forEach(s=> s.innerHTML='');
-    headers.forEach((h,i)=> [dateSelect,nameSelect,amountSelect].forEach(sel=> sel.add(new Option(h, i))));
-
-    const low = headers.map(h=>h.toLowerCase());
-    function find(keys){ for(let i=0;i<low.length;i++){ if(keys.some(k=> low[i].includes(k))) return i; } return 0; }
-    dateSelect.value = String(find(['תאריך','date']));
-    nameSelect.value = String(find(['שם לקוח','לקוח','customer','client']));
-    amountSelect.value = String(find(['סכום שובר','סכום','amount','total','₪']));
-  }
-
-  btnPreview.addEventListener('click', ()=>{
-    const dIdx=+dateSelect.value,nIdx=+nameSelect.value,aIdx=+amountSelect.value;
-    const preview = rows.slice(0,20).map(r=>({ date: normalizeDate(r[dIdx]||''), name: r[nIdx]||'', amount: parseAmount(r[aIdx]||'0') }));
-    renderPreview(preview);
-  });
-
-  function renderPreview(arr){
-    const total = arr.reduce((s,x)=> s + (x.amount||0), 0);
-    let html = `<div class="hint"><b>תצוגה מקדימה (עד 20)</b> | שורות: ${arr.length} | סכום: ${new Intl.NumberFormat('he-IL',{style:'currency',currency:'ILS'}).format(total)}</div>`;
-    html += '<div style="max-height:320px;overflow:auto"><table><thead><tr><th>תאריך</th><th>שם לקוח</th><th>סכום</th></tr></thead><tbody>';
-    arr.forEach(x=>{ html += `<tr><td>${x.date}</td><td>${x.name}</td><td>${x.amount}</td></tr>`; });
-    html += '</tbody></table></div>';
-    importStatus.innerHTML = html;
-  }
-
-  btnImport.addEventListener('click', async ()=>{
-    if(!supabase){ initSupabaseClient(); }
-    const { data: session } = await supabase.auth.getSession();
-    if(!session || !session.session){ alert('יש להתחבר (Email+Password)'); return; }
-
-    const dIdx=+dateSelect.value,nIdx=+nameSelect.value,aIdx=+amountSelect.value;
-    const items = rows.map(r=>({ date: normalizeDate(r[dIdx]||''), name: r[nIdx]||'', amount: parseAmount(r[aIdx]||'0') })).filter(x=> x.name && x.date);
-
-    importStatus.textContent = 'מייבא...';
-
-    // upsert customers by unique name
-    const uniqueNames = Array.from(new Set(items.map(x=>x.name)));
-    const customersToUpsert = uniqueNames.map(n=>({ name:n }));
-    const { error: custErr } = await supabase.from('customers').upsert(customersToUpsert, { onConflict:'name' });
-    if(custErr){ importStatus.textContent = 'שגיאה ביצירת לקוחות: ' + custErr.message; return; }
-
-    const { data: allCust, error: getCustErr } = await supabase.from('customers').select('id,name').in('name', uniqueNames);
-    if(getCustErr){ importStatus.textContent = 'שגיאה בקריאת לקוחות: ' + getCustErr.message; return; }
-    const idByName = Object.fromEntries(allCust.map(c=>[c.name,c.id]));
-
-    const coupons = items.map(x=>({ customer_id: idByName[x.name], date: x.date, amount: x.amount, redeemed: false, source_label: 'html-upload' }));
-
-    const chunkSize = 500;
-    for(let i=0;i<coupons.length;i+=chunkSize){
-      const chunk = coupons.slice(i,i+chunkSize);
-      const { error: coupErr } = await supabase.from('coupons').upsert(chunk, { onConflict:'customer_id,date' });
-      if(coupErr){ importStatus.textContent = 'שגיאת ייבוא (אצווה): ' + coupErr.message; return; }
-    }
-
-    importStatus.innerHTML = '<span class="ok">הייבוא הושלם. מרענן נתונים...</span>';
-    await refreshCustomers();
-  });
-
-  // ===== Customers list & details =====
-  const customersWrap = $('#customersWrap'), customerCard = $('#customerCard'), custTitle = $('#custTitle'), btnBack = $('#btnBack'), couponsWrap = $('#couponsWrap');
-  const btnRefresh = $('#btnRefresh');
-  btnRefresh.addEventListener('click', refreshCustomers);
-
-  async function refreshCustomers(){
-    if(!supabase){ initSupabaseClient(); }
-    const { data, error } = await supabase.from('customer_balances').select('*').order('name');
-    if(error){ customersWrap.innerHTML = '<span class="bad">שגיאה בקריאת נתונים: '+error.message+'</span>'; return; }
-    let html = '<table><thead><tr><th>לקוח</th><th>סה\"כ נטען</th><th>סה\"כ מומש</th><th>יתרה זמינה</th><th></th></tr></thead><tbody>';
-    data.forEach(r=>{
-      html += `<tr>
-        <td>${r.name}</td>
-        <td>${Number(r.total_loaded||0).toFixed(2)} ש"ח</td>
-        <td>${Number(r.total_redeemed||0).toFixed(2)} ש"ח</td>
-        <td><b>${Number(r.available_amount||0).toFixed(2)} ש"ח</b></td>
-        <td><button data-cid="${r.customer_id}" class="secondary btnOpen">פתח</button></td>
-      </tr>`;
-    });
-    html += '</tbody></table>';
-    customersWrap.innerHTML = html;
-    $$('.btnOpen').forEach(b=> b.addEventListener('click', ()=> openCustomer(b.getAttribute('data-cid'))));
-  }
-
-  async function openCustomer(customerId){
-    if(!supabase){ initSupabaseClient(); }
-    const { data: cust, error: ce } = await supabase.from('customers').select('id,name').eq('id', customerId).single();
-    if(ce){ alert('שגיאה: '+ce.message); return; }
-    custTitle.textContent = 'לקוח: ' + cust.name;
-
-    const { data: rows, error } = await supabase.from('coupons').select('id,date,amount,redeemed,redeemed_at').eq('customer_id', customerId).order('date', { ascending:false });
-    if(error){ alert('שגיאת קריאה: '+error.message); return; }
-
-    let html = '<table><thead><tr><th>תאריך</th><th>סכום</th><th>מומש</th><th>פעולה</th></tr></thead><tbody>';
-    rows.forEach(r=>{
-      html += `<tr>
-        <td>${r.date}</td>
-        <td>${Number(r.amount||0).toFixed(2)} ש"ח</td>
-        <td>${r.redeemed ? '✔️ ('+(r.redeemed_at? new Date(r.redeemed_at).toLocaleString('he-IL'):'')+')' : ''}</td>
-        <td>${r.redeemed ? '' : `<button class="secondary btnRedeem" data-id="${r.id}">סמן כמומש</button>`}</td>
-      </tr>`;
-    });
-    html += '</tbody></table>';
-
-    html += `
-      <div class="row" style="margin-top:12px">
-        <div class="col"><label>תאריך</label><input id="manualDate" placeholder="YYYY-MM-DD" /></div>
-        <div class="col"><label>סכום</label><input id="manualAmount" type="number" step="0.01" value="22" /></div>
-        <div class="col" style="flex:0 0 220px;align-self:end">
-          <button id="btnAddManual" class="primary">הוסף שובר ידני</button>
-        </div>
-      </div>`;
-
-    couponsWrap.innerHTML = html;
-    customerCard.style.display = 'block';
-
-    $$('.btnRedeem').forEach(b=> b.addEventListener('click', ()=> markRedeemed(parseInt(b.getAttribute('data-id'),10))));
-    $('#btnAddManual').addEventListener('click', async ()=>{
-      const date = cleanText($('#manualDate').value);
-      const amount = parseFloat($('#manualAmount').value||'22');
-      if(!date){ alert('נא למלא תאריך'); return; }
-      const { error } = await supabase.from('coupons').upsert({ customer_id: customerId, date, amount, redeemed:false, source_label:'manual' }, { onConflict:'customer_id,date' });
-      if(error){ alert('שגיאה בהוספה: '+error.message); return; }
-      openCustomer(customerId);
-      refreshCustomers();
-    });
-  }
-
-  $('#btnBack').addEventListener('click', ()=>{ customerCard.style.display = 'none'; });
-
-  async function markRedeemed(couponId){
-    if(!supabase){ initSupabaseClient(); }
-    const { error } = await supabase.from('coupons').update({ redeemed:true, redeemed_at:new Date().toISOString() }).eq('id', couponId);
-    if(error){ alert('שגיאת עדכון: '+error.message); return; }
-    const name = $('#custTitle').textContent.replace('לקוח: ','').trim();
-    const { data: cust } = await supabase.from('customers').select('id').eq('name', name).single();
-    if(cust) openCustomer(cust.id);
-    refreshCustomers();
-  }
-
-  // הפעלה אוטומטית בעת טעינת הדף
   document.addEventListener('DOMContentLoaded', loadAndConnect);
+
+  /* כאן ממשיכים הפונקציות של טעינת HTML, import, הצגת לקוחות וכו’... */
 </script>
 </body>
 </html>
