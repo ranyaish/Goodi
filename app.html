@@ -9,8 +9,8 @@
 <title>גודי שוברים - מערכת ניהול</title>
 
 <script>
-  // גרסה לקבצים/שאילתות כדי לעקוף קאש
-  window.APP_VERSION = "v7-2025-08-22-15-50";
+  // גרסת קובץ לעקיפת קאש
+  window.APP_VERSION = "v8-2025-08-22-16-05";
   (function loadSupabase(){
     const v = "?v="+window.APP_VERSION;
     const urls=[
@@ -62,7 +62,6 @@ thead th{background:#f8fafc;position:sticky;top:64px}
 </head>
 <body>
 <header>
-  <!-- שים את קובץ הלוגו בשם logo.png באותה תיקייה -->
   <img id="logo" alt="לוגו">
   <h2 style="margin:0">גודי שוברים - מערכת ניהול</h2>
   <div style="flex:1"></div>
@@ -101,7 +100,7 @@ thead th{background:#f8fafc;position:sticky;top:64px}
     <summary>דיבאג</summary>
     <div>גרסה: <code id="v"></code></div>
     <div>סטטוס: <span id="dbgStatus">—</span></div>
-    <div>customers: <span id="dbgCustCount">0</span> | ids מ-coupons: <span id="dbgIdsCount">0</span> | לקוחות בשימוש: <span id="dbgUsableCount">0</span></div>
+    <div>customers (טבלה): <span id="dbgCustCount">0</span> | לקוחות לשימוש: <span id="dbgUsableCount">0</span></div>
     <div>שגיאה אחרונה: <code id="dbgErr">—</code></div>
   </details>
 </div>
@@ -123,7 +122,7 @@ let sb=null, customers=[];
 
 document.getElementById('logo').src = "logo.png?v="+(window.APP_VERSION||'');
 
-/* אתחול כאשר הספרייה מוכנה */
+/* אתחול */
 document.addEventListener('supabase-ready', init);
 async function init(){
   try{
@@ -132,68 +131,35 @@ async function init(){
     const { error } = await sb.auth.getSession();
     $("#connStatus").textContent = error ? ('שגיאה: '+error.message) : 'מחובר ל-Supabase';
     setDbg("dbgStatus", "חיבור יוצר");
-    await loadCustomers();
+    await loadCustomersAll();
   }catch(e){
     $("#connStatus").textContent='שגיאת חיבור: '+safeMsg(e);
     setDbg("dbgErr", safeMsg(e));
   }
 }
 
-/* טעינת לקוחות:
-   א. ננסה להביא ישירות מ-customers (גם אם אין להם שוברים).
-   ב. אם לא חזר כלום / שגיאה — נבנה לפי customer_id ייחודי מתוך coupons ואז ניקח את השמות מ-customers.
-*/
-async function loadCustomers(){
+/* טען את כל הלקוחות מ-customers (ללא תלות בקופונים) */
+async function loadCustomersAll(){
   try{
-    // שלב א
-    let cust = [];
-    let c1 = await sb.from('customers').select('customer_id,name').order('name');
-    if(c1.error){ setDbg("dbgErr", safeMsg(c1.error)); }
-    cust = (c1.data||[]).map(r=>({customer_id:r.customer_id, name:r.name||('לקוח #'+r.customer_id)}));
-
-    setDbg("dbgCustCount", cust.length);
-
-    // אם יש — משתמשים בזה
-    if(cust.length>0){
-      customers = cust;
-      $("#connStatus").textContent = `נטענו ${customers.length} לקוחות מ-customers`;
-      setDbg("dbgUsableCount", customers.length);
-      return;
-    }
-
-    // שלב ב: ids מ-coupons
-    const idsRes = await sb.from('coupons').select('customer_id').not('customer_id','is',null);
-    if(idsRes.error){ throw idsRes.error; }
-    const ids = [...new Set((idsRes.data||[]).map(r=>r.customer_id))];
-    setDbg("dbgIdsCount", ids.length);
-
-    if(ids.length===0){
-      $("#connStatus").textContent='אין לקוחות (customers ריק ו-coupons ריק).';
-      setDbg("dbgUsableCount", 0);
-      return;
-    }
-
-    const namesRes = await sb.from('customers').select('customer_id,name').in('customer_id', ids);
-    if(namesRes.error){ throw namesRes.error; }
-    const map = new Map(namesRes.data.map(r=>[String(r.customer_id), r.name||('לקוח #'+r.customer_id)]));
-    customers = ids.map(id=>({customer_id:id, name: map.get(String(id)) || ('לקוח #'+id)}))
-                   .sort((a,b)=>a.name.localeCompare(b.name,'he'));
-    $("#connStatus").textContent = `נטענו ${customers.length} לקוחות (ids מתוך coupons)`;
+    const r = await sb.from('customers').select('customer_id,name').order('name');
+    if(r.error) throw r.error;
+    customers = (r.data||[]).map(x=>({customer_id:x.customer_id, name:x.name||('לקוח #'+x.customer_id)}));
+    setDbg("dbgCustCount", customers.length);
     setDbg("dbgUsableCount", customers.length);
+    if(customers.length===0){
+      $("#connStatus").textContent='אין רשומות בטבלת customers.';
+    }else{
+      $("#connStatus").textContent=`נטענו ${customers.length} לקוחות (customers)`;
+    }
   }catch(e){
-    $("#connStatus").textContent = 'שגיאה בטעינת לקוחות: '+safeMsg(e);
+    $("#connStatus").textContent='שגיאה בטעינת לקוחות: '+safeMsg(e);
     setDbg("dbgErr", safeMsg(e));
-    customers = [];
+    customers=[];
   }
 }
 
 /* מודאל בחירה */
-function openModal(){
-  $("#modalPick").style.display='flex';
-  $("#searchInput").value='';
-  $("#searchInput").focus();
-  renderList(customers);
-}
+function openModal(){ $("#modalPick").style.display='flex'; $("#searchInput").value=''; $("#searchInput").focus(); renderList(customers); }
 function closeModal(){ $("#modalPick").style.display='none'; }
 $("#btnPick").addEventListener('click', openModal);
 $("#btnCloseModal").addEventListener('click', closeModal);
@@ -269,13 +235,13 @@ document.addEventListener('click', async ev=>{
   }catch(e){ alert('שגיאת עדכון: '+safeMsg(e)); setDbg("dbgErr", safeMsg(e)); }
 });
 
-/* יציאה – גם inline וגם מאזין, וחשוף ל-window */
+/* יציאה */
 async function logoutApp(){
   try{ await sb?.auth?.signOut?.(); }catch{}
   $("#currentCustomer").value='לא נבחר';
   $("#custCard").style.display='none';
   document.getElementById('modalPick').style.display='none';
-  location.reload(); // רענון מלא – הכי יציב במובייל
+  location.reload();
 }
 window.logoutApp = logoutApp;
 document.getElementById('btnLogout').addEventListener('click', logoutApp);
