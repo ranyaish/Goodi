@@ -9,9 +9,10 @@
 <title>גודי שוברים - מערכת ניהול</title>
 
 <script>
-// גרסה לעקיפת קאש
-window.APP_VERSION = "v9-2025-08-22-16-20";
-// טוען supabase-js עם פרמטר גרסה
+// ===== גרסה לעקיפת קאש =====
+window.APP_VERSION = "v11-2025-08-22-17-05";
+
+// ===== טעינת supabase-js עם גיבוי ופרמטר גרסה =====
 (function loadSupabase(){
   const v="?v="+window.APP_VERSION;
   const urls=[
@@ -20,7 +21,8 @@ window.APP_VERSION = "v9-2025-08-22-16-20";
   ];
   (function go(i){
     if(i>=urls.length){ document.dispatchEvent(new Event("supabase-ready")); return; }
-    const s=document.createElement("script"); s.src=urls[i]; s.async=true;
+    const s=document.createElement("script");
+    s.src=urls[i]; s.async=true;
     s.onload=()=>document.dispatchEvent(new Event("supabase-ready"));
     s.onerror=()=>go(i+1);
     document.head.appendChild(s);
@@ -47,7 +49,7 @@ thead th{background:#f8fafc;position:sticky;top:64px}
 .badge{padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:12px}
 .hint{color:var(--muted);font-size:13px}
 
-/* מודאל כללי */
+/* מודאל */
 .modal-b{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:9999}
 .modal{background:#fff;border:1px solid var(--line);border-radius:14px;max-width:460px;width:92%;padding:14px}
 .list{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:10px}
@@ -65,26 +67,26 @@ thead th{background:#f8fafc;position:sticky;top:64px}
   <img id="logo" alt="לוגו">
   <h2 style="margin:0">גודי שוברים - מערכת ניהול</h2>
   <div style="flex:1"></div>
-  <button id="btnLogout" type="button" class="small">יציאה</button>
+  <button id="btnLogout" type="button" class="small" title="יציאה">יציאה</button>
 </header>
 
 <div class="container">
-  <!-- כרטיס התחברות -->
-  <div class="card" id="authCard">
+  <!-- לוגין מקומי (במקום Supabase Auth) -->
+  <div class="card" id="localAuthCard">
     <h3 style="margin:0 0 8px 0">כניסה</h3>
     <div style="display:grid;gap:8px;grid-template-columns:1fr 1fr;align-items:end">
       <div>
-        <label>אימייל</label>
-        <input id="email" type="email" placeholder="you@example.com"/>
+        <label>שם משתמש</label>
+        <input id="localUser" placeholder="admin"/>
       </div>
       <div>
         <label>סיסמה</label>
-        <input id="password" type="password" placeholder="••••••••"/>
+        <input id="localPass" type="password" placeholder="1234"/>
       </div>
     </div>
     <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
-      <button id="btnLogin" class="primary">התחבר / הירשם</button>
-      <span id="authMsg" class="hint"></span>
+      <button id="btnLocalLogin" class="primary">התחבר</button>
+      <span id="localAuthMsg" class="hint"></span>
     </div>
   </div>
 
@@ -126,9 +128,16 @@ thead th{background:#f8fafc;position:sticky;top:64px}
 </div>
 
 <script>
-/* ===== קבועים ===== */
+/* ===== תצורה ===== */
+// משתמש/סיסמה מקומיים — שנה כרצונך
+const LOCAL_USER="admin";
+const LOCAL_PASS="1234";
+
+// Supabase — לשאילתות DB בלבד (ללא Auth)
 const SB_URL  = "https://ylqpxwgchwalcblfipsu.supabase.co";
 const SB_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM";
+
+/* ===== עזר ===== */
 const $=s=>document.querySelector(s);
 const fmtILS=n=>new Intl.NumberFormat('he-IL',{style:'currency',currency:'ILS'}).format(Number(n||0));
 const isoToDDMMYYYY=iso=>{ if(!iso) return ''; const [y,m,d]=String(iso).split('-'); return `${d.padStart(2,'0')}/${m.padStart(2,'0')}/${y}`; };
@@ -138,83 +147,71 @@ const setDbg=(k,v)=>{ const el=$("#"+k); if(el) el.textContent=v; };
 $("#v").textContent = window.APP_VERSION||'';
 document.getElementById('logo').src = "logo.png?v="+(window.APP_VERSION||'');
 
-let sb=null, customers=[];
+let sb=null, customers=[], loggedIn=false;
 
-/* ===== אתחול ספרייה ===== */
+/* ===== אתחול Supabase ===== */
 document.addEventListener('supabase-ready', ()=>{
   if(!window.supabase){ alert("ספריית Supabase לא נטענה"); return; }
   sb = window.supabase.createClient(SB_URL, SB_ANON);
-  boot();
+  $("#connStatus").textContent='חיבור ל־Supabase מוכן';
 });
 
-async function boot(){
-  // יש סשן? נלך ישר לעבודה
-  const { data:{ session } } = await sb.auth.getSession();
-  if(session){
-    $("#authCard").style.display='none';
+/* ===== לוגין מקומי ===== */
+$("#btnLocalLogin").addEventListener('click', doLocalLogin);
+$("#localPass").addEventListener('keydown', e=>{ if(e.key==='Enter') doLocalLogin(); });
+$("#localUser").addEventListener('keydown', e=>{ if(e.key==='Enter') doLocalLogin(); });
+
+function doLocalLogin(){
+  const u=$("#localUser").value.trim();
+  const p=$("#localPass").value;
+  if(u===LOCAL_USER && p===LOCAL_PASS){
+    loggedIn=true;
+    $("#localAuthMsg").textContent='';
+    $("#localAuthCard").style.display='none';
     $("#workCard").style.display='block';
-    $("#connStatus").textContent='מחובר (authenticated)';
-    await loadCustomersAll();
+    setDbg("dbgStatus","נכנסת (לוגין מקומי)");
+    loadCustomersAll();
   }else{
-    $("#authCard").style.display='block';
-    $("#workCard").style.display='none';
-    $("#connStatus").textContent='דרושה התחברות';
+    $("#localAuthMsg").textContent="פרטי כניסה שגויים";
   }
 }
 
-/* ===== התחברות ===== */
-$("#btnLogin").addEventListener('click', async ()=>{
-  const email=$("#email").value.trim();
-  const password=$("#password").value.trim();
-  $("#authMsg").textContent='מתחבר...';
-  try{
-    // ננסה להירשם, ואם קיים משתמש – נבצע התחברות
-    let { error } = await sb.auth.signUp({ email, password });
-    if(error && !String(error.message||'').includes('already registered')){
-      throw error;
-    }
-    const res = await sb.auth.signInWithPassword({ email, password });
-    if(res.error) throw res.error;
-
-    $("#authMsg").textContent='התחברות הצליחה';
-    $("#authCard").style.display='none';
-    $("#workCard").style.display='block';
-    $("#connStatus").textContent='מחובר (authenticated)';
-    await loadCustomersAll();
-  }catch(e){
-    $("#authMsg").textContent='שגיאה: '+safeMsg(e);
-    setDbg("dbgErr", safeMsg(e));
-  }
-});
-
 /* ===== יציאה ===== */
-document.getElementById('btnLogout').addEventListener('click', async ()=>{
-  try{ await sb.auth.signOut(); }catch{}
-  location.reload();
+document.getElementById('btnLogout').addEventListener('click', ()=>{
+  loggedIn=false;
+  $("#workCard").style.display='none';
+  $("#custCard").style.display='none';
+  $("#localAuthCard").style.display='block';
+  $("#localPass").value='';
 });
 
-/* ===== קריאת לקוחות (customers) ===== */
+/* ===== טעינת לקוחות מה-DB ===== */
 async function loadCustomersAll(){
+  if(!loggedIn) return;
   try{
     setDbg("dbgStatus","טוען לקוחות...");
     const r = await sb.from('customers').select('customer_id,name').order('name');
     if(r.error) throw r.error;
     customers = (r.data||[]).map(x=>({customer_id:x.customer_id, name:x.name||('לקוח #'+x.customer_id)}));
     setDbg("dbgCustCount", customers.length);
-    if(customers.length===0){
-      $("#connStatus").textContent='אין רשומות בטבלת customers.';
-    }else{
-      $("#connStatus").textContent=`נטענו ${customers.length} לקוחות`;
-    }
+    $("#connStatus").textContent = customers.length ? `נטענו ${customers.length} לקוחות` : 'אין רשומות בטבלת customers.';
   }catch(e){
-    setDbg("dbgErr", safeMsg(e));
     $("#connStatus").textContent='שגיאת טעינת לקוחות: '+safeMsg(e);
+    setDbg("dbgErr", safeMsg(e));
   }
 }
 
-/* ===== בחירה והצגה ===== */
-function openModal(){ $("#modalPick").style.display='flex'; $("#searchInput").value=''; $("#searchInput").focus(); renderList(customers); }
+/* ===== בחירת לקוח ===== */
+function openModal(){
+  if(!loggedIn) return;
+  $("#modalPick").style.display='flex';
+  $("#searchInput").value='';
+  $("#searchInput").focus();
+  renderList(customers);
+}
 function closeModal(){ $("#modalPick").style.display='none'; }
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
+
 $("#btnPick").addEventListener('click', openModal);
 $("#btnCloseModal").addEventListener('click', closeModal);
 
@@ -236,7 +233,9 @@ document.getElementById('listWrap').addEventListener('click', ev=>{
   openCustomer(id, nm);
 });
 
+/* ===== כרטיס לקוח + שוברים ===== */
 async function openCustomer(customerId, nameFromList){
+  if(!loggedIn) return;
   try{
     const r = await sb.from('coupons')
       .select('id,date,amount,redeemed,redeemed_at')
@@ -271,7 +270,7 @@ async function openCustomer(customerId, nameFromList){
   }
 }
 
-/* שינוי סטטוס מימוש */
+/* ===== שינוי סטטוס מימוש ===== */
 document.addEventListener('click', async ev=>{
   const b=ev.target.closest('button.toggle'); if(!b) return;
   const id=parseInt(b.dataset.id,10), isRed=b.dataset.state==='1', cid=b.dataset.cid;
