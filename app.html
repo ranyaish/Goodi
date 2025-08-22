@@ -1,5 +1,5 @@
 
-<!-- ==== לוג 5 ריצות אחרונות של GitHub Actions ==== -->
+<!-- ==== לוג 5 ריצות אחרונות של GitHub Actions (גרסה ממוקדת) ==== -->
 <section id="gh-actions-log" dir="rtl" style="max-width:920px;margin:24px auto;border:1px solid #e5e7eb;border-radius:12px;padding:16px;background:#fff">
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
     <strong style="font-size:18px;">אוטומציה – 5 ריצות אחרונות</strong>
@@ -15,7 +15,8 @@
 (async function loadGhRuns(){
   const owner = 'ranyaish';
   const repo  = 'Goodi';
-  const api   = `https://api.github.com/repos/${owner}/${repo}/actions/runs?per_page=5`;
+  const qsBuster = `cb=${Date.now()}`; // לעקוף קאש
+
   const elWrap = document.getElementById('gh-actions-items');
   const elRefresh = document.getElementById('gh-actions-refresh');
 
@@ -48,10 +49,29 @@
   }
 
   try{
-    const res = await fetch(api, { headers:{ 'Accept':'application/vnd.github+json' }});
-    if(!res.ok) throw new Error(`GitHub API ${res.status}`);
-    const data = await res.json();
-    const runs = (data.workflow_runs || []);
+    // 1) מוצא את ה-workflow לפי הנתיב של הקובץ
+    const wfRes = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/actions/workflows?per_page=100&${qsBuster}`,
+      { headers:{ 'Accept':'application/vnd.github+json', 'User-Agent':'goodi-app' } }
+    );
+    if(!wfRes.ok) throw new Error(`Workflows list ${wfRes.status}`);
+    const wfData = await wfRes.json();
+    const wf = (wfData.workflows || []).find(w => (w.path === '.github/workflows/goodi.yml'));
+    if(!wf){
+      elWrap.innerHTML = `<div style="color:#dc2626;">לא נמצא workflow בשם goodi.yml.</div>`;
+      elRefresh.textContent = 'נכשל';
+      return;
+    }
+
+    // 2) מביא ריצות של ה-workflow הזה בלבד
+    const runsRes = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${wf.id}/runs?per_page=5&${qsBuster}`,
+      { headers:{ 'Accept':'application/vnd.github+json', 'User-Agent':'goodi-app' } }
+    );
+    if(!runsRes.ok) throw new Error(`Workflow runs ${runsRes.status}`);
+    const runsData = await runsRes.json();
+    const runs = runsData.workflow_runs || [];
+
     elWrap.innerHTML = runs.map(run=>{
       const statusTxt = hebStatus(run.status, run.conclusion);
       const when = fmtDate(run.run_started_at || run.created_at);
@@ -74,6 +94,7 @@
           <span style="font-size:12px;opacity:.6;">פתח ↗</span>
         </a>`;
     }).join('') || `<div style="opacity:.7;">אין ריצות להצגה.</div>`;
+
     elRefresh.textContent = `עודכן: ${new Date().toLocaleTimeString('he-IL',{timeZone:'Asia/Jerusalem'})}`;
   }catch(err){
     elWrap.innerHTML = `<div style="color:#dc2626;">שגיאה בטעינת ריצות מ-GitHub: ${err.message}</div>`;
@@ -81,9 +102,7 @@
   }
 })();
 </script>
-<!-- ==== /סוף לוג ריצות ==== -->
-
-
+<!-- ==== /סוף הלוג ==== -->
 
 
 
