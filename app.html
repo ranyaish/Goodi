@@ -46,7 +46,7 @@ thead th{position:sticky;top:64px;background:#fff}
 
 /* מודאל בחירת לקוח */
 .modal-backdrop{
-  position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:50;
+  position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:9999;
 }
 .modal{
   background:#fff;border:1px solid var(--line);border-radius:14px;max-width:560px;width:90%;padding:14px;
@@ -64,7 +64,7 @@ thead th{position:sticky;top:64px;background:#fff}
 
 <div class="container">
 
-  <!-- פס פעולה ראשי: בחירת לקוח -->
+  <!-- פס פעולה ראשי: בחירת לקוח (שדות Supabase מוסתרים; חיבור אוטומטי) -->
   <div class="card">
     <div class="row" style="align-items:end">
       <div class="col">
@@ -73,6 +73,9 @@ thead th{position:sticky;top:64px;background:#fff}
       </div>
       <div class="col" style="flex:0 0 220px">
         <button id="btnPick" class="primary">בחר לקוח</button>
+      </div>
+      <div class="col" style="flex:0 0 160px">
+        <button id="btnReload" title="רענן רשימת לקוחות">רענן לקוחות</button>
       </div>
     </div>
     <div id="connStatus" class="hint" style="margin-top:8px">מחבר…</div>
@@ -116,26 +119,42 @@ function isoToDDMMYYYY(iso){ if(!iso) return ''; const [y,m,d]=String(iso).split
 /* ===== Supabase (מוסתר – טעינה אוטומטית) ===== */
 const DEFAULT_URL="https://ylqpxwgchwalcblfipsu.supabase.co";
 const DEFAULT_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM";
-let supabase=null, customersCache=[];
+let supabase=null, customersCache=[], customersLoaded=false;
 
 async function init(){
-  const url = localStorage.getItem('sb_url') || DEFAULT_URL;
-  const key = localStorage.getItem('sb_key') || DEFAULT_KEY;
-  if(!window.supabase){$('#connStatus').textContent='ספריית Supabase לא נטענה';return;}
-  supabase=window.supabase.createClient(url, key);
-  const {error}=await supabase.auth.getSession();
-  $('#connStatus').textContent = error?('שגיאה: '+error.message):'מחובר ל-Supabase';
-  await loadCustomers();
+  try{
+    if(!window.supabase){ $('#connStatus').textContent='ספריית Supabase לא נטענה'; return; }
+    supabase = window.supabase.createClient(
+      localStorage.getItem('sb_url')||DEFAULT_URL,
+      localStorage.getItem('sb_key')||DEFAULT_KEY
+    );
+    const { error } = await supabase.auth.getSession();
+    $('#connStatus').textContent = error?('שגיאה: '+error.message):'מחובר ל-Supabase';
+    await loadCustomers(true);
+  }catch(e){
+    $('#connStatus').textContent='שגיאת חיבור: '+safeMsg(e);
+  }
 }
 document.addEventListener('supabase-ready', init);
 
 /* ===== מודאל בחירת לקוח ===== */
-function openModal(){ $('#modalPick').style.display='flex'; $('#searchInput').focus(); renderList(customersCache); }
-function closeModal(){ $('#modalPick').style.display='none'; $('#searchInput').value=''; }
-
+function openModal(){
+  // אם עוד לא נטען — נטען עכשיו ואז נפתח
+  if(!customersLoaded){ loadCustomers(true).then(()=>{ openModalNow(); }); }
+  else { openModalNow(); }
+}
+function openModalNow(){
+  $('#modalPick').style.display='flex';
+  $('#searchInput').value='';
+  $('#searchInput').focus();
+  renderList(customersCache);
+}
+function closeModal(){ $('#modalPick').style.display='none'; }
 $('#btnPick').addEventListener('click', openModal);
 $('#btnCloseModal').addEventListener('click', closeModal);
 $('#btnClose').addEventListener('click', ()=>{ $('#custCard').style.display='none'; $('#currentCustomer').value='לא נבחר'; });
+
+$('#btnReload').addEventListener('click', ()=> loadCustomers(true));
 
 $('#searchInput').addEventListener('input', ()=>{
   const q=$('#searchInput').value.toLowerCase().trim();
@@ -143,23 +162,35 @@ $('#searchInput').addEventListener('input', ()=>{
   renderList(list);
 });
 
+// האזנת קליקים עם האצלת אירועים כדי לתפוס גם כפתורים שנוצרו דינאמית
+$('#listWrap').addEventListener('click', (ev)=>{
+  const btn = ev.target.closest('button[data-id]');
+  if(!btn) return;
+  const cid = btn.dataset.id;
+  const name = btn.dataset.name || btn.textContent.trim();
+  $('#currentCustomer').value = name;
+  closeModal();
+  openCustomer(cid, name);
+});
+
 function renderList(list){
   const el=$('#listWrap');
   if(!list.length){ el.innerHTML='<div style="padding:10px" class="hint">לא נמצאו לקוחות</div>'; return; }
-  el.innerHTML = list.map(c=>`<button data-id="${c.customer_id}" data-name="${c.name}">${c.name}</button>`).join('');
-  $$('#listWrap button').forEach(b=> b.addEventListener('click', ()=>{
-    const cid = b.dataset.id, name=b.dataset.name;
-    $('#currentCustomer').value=name;
-    closeModal();
-    openCustomer(cid, name);
-  }));
+  el.innerHTML = list.map(c=>`<button type="button" data-id="${c.customer_id}" data-name="${c.name}">${c.name}</button>`).join('');
 }
 
 /* ===== נתוני לקוחות ===== */
-async function loadCustomers(){
-  const { data, error } = await supabase.from('customers').select('customer_id,name').order('name');
-  if(error){ $('#connStatus').textContent='שגיאה בטעינת לקוחות: '+safeMsg(error); return; }
-  customersCache = data||[];
+async function loadCustomers(showCount=false){
+  try{
+    $('#connStatus').textContent='טוען לקוחות…';
+    const { data, error } = await supabase.from('customers').select('customer_id,name').order('name');
+    if(error){ $('#connStatus').textContent='שגיאה בטעינת לקוחות: '+safeMsg(error); return; }
+    customersCache = data||[];
+    customersLoaded = true;
+    $('#connStatus').textContent = showCount ? `מחובר • נטענו ${customersCache.length} לקוחות` : 'מחובר';
+  }catch(e){
+    $('#connStatus').textContent='שגיאה בטעינה: '+safeMsg(e);
+  }
 }
 
 /* ===== פרטי לקוח (רשימת שוברים בלבד) ===== */
@@ -189,11 +220,13 @@ async function openCustomer(customerId, name){
     $('#couponTable').innerHTML=html;
     $('#custCard').style.display='block';
 
-    $$('.btnToggle').forEach(b=> b.addEventListener('click', ()=> toggleRedeemed(
-      parseInt(b.dataset.id,10),
-      b.dataset.state==='1',
-      b.dataset.cid
-    )));
+    // האזנה באמצעות האצלת אירועים (לטובת רענון עתידי)
+    $('#couponTable').addEventListener('click', (ev)=>{
+      const b = ev.target.closest('.btnToggle');
+      if(!b) return;
+      toggleRedeemed(parseInt(b.dataset.id,10), b.dataset.state==='1', b.dataset.cid);
+    }, { once:false });
+
   }catch(e){ alert('שגיאה: '+safeMsg(e)); }
 }
 
@@ -204,7 +237,7 @@ async function toggleRedeemed(couponId, currentlyRedeemed, customerId){
       const name = prompt('בטוח לבטל מימוש?\nהכנס/י שם מבטל (בעברית):');
       if(!name) return;
       if(!/[\u0590-\u05FF]/.test(name)){ alert('נא להזין שם בעברית.'); return; }
-      // אם תרצה גם לשמור את שם המבטל בלוג — תגיד לי ואוסיף טבלת אירועים.
+      // אפשר להוסיף לוג אירועים אם תרצה
     }
     const patch = currentlyRedeemed
       ? { redeemed:false, redeemed_at:null }
