@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ניהול שוברים • טעינת HTML → Supabase</title>
 
-  <!-- נטען את supabase-js עם Fallbackים -->
+  <!-- טעינת supabase-js עם Fallbackים -->
   <script>
     (function loadSupabase() {
       const urls = [
@@ -14,10 +14,10 @@
         "https://cdnjs.cloudflare.com/ajax/libs/supabase-js/2.45.4/supabase.min.js"
       ];
       function tryNext(i){
-        if(i>=urls.length){ console.error("Failed to load supabase-js from all CDNs"); return; }
+        if(i>=urls.length){ console.error("Failed to load supabase-js from all CDNs"); document.dispatchEvent(new Event("supabase-ready")); return; }
         const s=document.createElement("script");
         s.src=urls[i]; s.async=true; s.crossOrigin="anonymous";
-        s.onload=()=>{ window.__SUPABASE_LOADED__=true; document.dispatchEvent(new Event("supabase-ready")); };
+        s.onload=()=>{ document.dispatchEvent(new Event("supabase-ready")); };
         s.onerror=()=>{ console.warn("CDN failed:", urls[i]); tryNext(i+1); };
         document.head.appendChild(s);
       }
@@ -53,7 +53,6 @@
 </header>
 <div class="container">
 
-  <!-- חיבור ל-Supabase -->
   <div class="card">
     <div class="row">
       <div class="col">
@@ -69,7 +68,6 @@
     <div class="hint">החיבור נוצר אוטומטית בעת טעינת הדף ובכל שינוי בשדות.</div>
   </div>
 
-  <!-- התחברות -->
   <div class="card">
     <div class="row">
       <div class="col">
@@ -87,7 +85,6 @@
     <div id="authStatus" class="hint"></div>
   </div>
 
-  <!-- ייבוא דוח HTML -->
   <div class="card">
     <div class="row">
       <div class="col">
@@ -115,7 +112,6 @@
     <div id="importStatus" class="hint"></div>
   </div>
 
-  <!-- סיכומי לקוחות -->
   <div class="card">
     <div class="row" style="align-items:center;justify-content:space-between">
       <div><b>לקוחות וסיכומים</b></div>
@@ -126,7 +122,6 @@
     <div id="customersWrap" style="margin-top:10px"></div>
   </div>
 
-  <!-- פרטי לקוח -->
   <div class="card" id="customerCard" style="display:none">
     <div class="row">
       <div class="col"><b id="custTitle">פרטי לקוח</b></div>
@@ -150,25 +145,21 @@
   const supabaseUrlEl = $('#supabaseUrl'), supabaseKeyEl = $('#supabaseKey');
   const connStatus = $('#connStatus'), authStatus = $('#authStatus');
 
-  function safeMsg(err) {
-    // מחרוזת ידידותית + לוג מלא לקונסול
-    const t = (err && (err.message || err.statusText || err.name)) || String(err || 'Unknown');
-    console.error('Supabase error:', err);
-    return t;
-  }
+  function safeMsg(err){ const t=(err&&(err.message||err.statusText||err.name))||String(err||'Unknown'); console.error('Supabase error:',err); return t; }
 
   async function initSupabaseClient(){
     try {
       connStatus.textContent = 'מתחבר…';
-      if (!window.Supabase) { connStatus.textContent = 'ספריית Supabase לא נטענה'; return; }
+      // ✅ בדיקה נכונה: האובייקט הוא window.supabase (לא Supabase)
+      if (!window.supabase) { connStatus.textContent = 'ספריית Supabase לא נטענה'; return; }
+
       const url = (supabaseUrlEl.value || '').trim() || DEFAULT_SUPABASE_URL;
       const key = (supabaseKeyEl.value || '').trim() || DEFAULT_ANON_KEY;
 
-      supabase = window.Supabase.createClient(url, key);
+      supabase = window.supabase.createClient(url, key);
       localStorage.setItem('sb_url', url);
       localStorage.setItem('sb_key', key);
 
-      // בדיקת חיבור בסיסית: נקרא endpoint קל (session לא אמור לזרוק)
       const { error } = await supabase.auth.getSession();
       if (error) { connStatus.textContent = 'שגיאת חיבור: ' + safeMsg(error); return; }
 
@@ -206,16 +197,16 @@
     }
   });
 
-  // התחברות/חיבור מחדש אוטומטי בכל שינוי ב-URL/Key
+  // חיבור מחדש אוטומטי בכל שינוי ב-URL/Key
   ['change','blur','input'].forEach(evt=>{
     supabaseUrlEl.addEventListener(evt, ()=>{ initSupabaseClient(); });
     supabaseKeyEl.addEventListener(evt, ()=>{ initSupabaseClient(); });
   });
 
-  // נתחיל רק אחרי שהספרייה נטענה
+  // נתחיל רק אחרי שהספרייה נטענה (מאירוע ה-loader למעלה)
   document.addEventListener('supabase-ready', loadAndConnect);
 
-  // ===== מפה והלאה שאר הלוגיקה (ייבוא HTML, תצוגות וכו') =====
+  // ===== שאר הלוגיקה (ייבוא HTML, תצוגות וכו') =====
   function cleanText(t){return (t||'').replace(/[\u200e\u200f]/g,'').replace(/\s+/g,' ').trim();}
   function parseAmount(s){ if(!s) return 0; s=String(s).replace(/[₪,\s]/g,'').replace(/[^0-9.\-]/g,''); const n=parseFloat(s); return isNaN(n)?0:n; }
   function normalizeDate(s){ if(!s) return ''; s=s.replace(/[\.]/g,'/').replace(/\s+/g,' ').trim(); const m1=s.match(/(\d{1,2})[\/](\d{1,2})[\/](\d{2,4})/); if(m1){ let [_,d,m,y]=m1; if(y.length===2) y='20'+y; return `${y.padStart(4,'0')}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;} const m2=s.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/); if(m2){ let [_,y,m,d]=m2; return `${y.padStart(4,'0')}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;} return s; }
@@ -223,7 +214,7 @@
   const fileInput = $('#fileInput'), tableSelect = $('#tableSelect');
   const dateSelect = $('#dateSelect'), nameSelect = $('#nameSelect'), amountSelect = $('#amountSelect');
   const btnPreview = $('#btnPreview'), btnImport = $('#btnImport'), importStatus = $('#importStatus');
-  let parsedDoc=null, tables=[], headers=[], rows=[];
+  let tables=[], headers=[], rows=[];
 
   fileInput.addEventListener('change', async ()=>{
     const file = fileInput.files?.[0]; if(!file) return;
