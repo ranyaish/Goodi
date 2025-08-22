@@ -24,7 +24,8 @@
     th,td{padding:8px 10px;border-bottom:1px solid #263246;text-align:right}
     th{background:#0e1523;position:sticky;top:68px}
     .ok{color:#22c55e}.bad{color:#ef4444}
-    .tag{display:inline-block;padding:2px 8px;border:1px solid #2a3a52;border-radius:999px;color:#9fb3c8}
+    .status{font-size:12px;color:#9fb3c8}
+    .hidden{display:none}
   </style>
 </head>
 <body>
@@ -44,11 +45,13 @@
         <label>Supabase anon key</label>
         <input id="supabaseKey" />
       </div>
-      <div class="col" style="flex:0 0 180px;align-self:end">
+      <!-- הכפתור נשאר כמוס/לא הכרחי -->
+      <div class="col hidden" style="flex:0 0 180px;align-self:end">
         <button id="btnConnect" class="primary">שמור חיבור</button>
       </div>
     </div>
-    <div class="hint">הערכים נשמרים מקומית בדפדפן (LocalStorage). ברירת מחדל מוגדרת בקובץ.</div>
+    <div class="status" id="connStatus">מתחבר…</div>
+    <div class="hint">חיבור נוצר אוטומטית בעת טעינת הדף ובכל שינוי בשדות.</div>
   </div>
 
   <!-- התחברות -->
@@ -128,29 +131,37 @@
   function parseAmount(s){ if(!s) return 0; s=String(s).replace(/[₪,\s]/g,'').replace(/[^0-9.\-]/g,''); const n=parseFloat(s); return isNaN(n)?0:n; }
   function normalizeDate(s){ if(!s) return ''; s=s.replace(/[\.]/g,'/').replace(/\s+/g,' ').trim(); const m1=s.match(/(\d{1,2})[\/](\d{1,2})[\/](\d{2,4})/); if(m1){ let [_,d,m,y]=m1; if(y.length===2) y='20'+y; return `${y.padStart(4,'0')}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;} const m2=s.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/); if(m2){ let [_,y,m,d]=m2; return `${y.padStart(4,'0')}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;} return s; }
 
-  // Defaults (מהקובץ)
+  // ברירות מחדל (אפשר לשנות)
   const DEFAULT_SUPABASE_URL = "https://ylqpxwgchwalcblfipsu.supabase.co";
   const DEFAULT_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM";
 
   let supabase = null, currentUser = null;
-  const supabaseUrlEl = $('#supabaseUrl'), supabaseKeyEl = $('#supabaseKey'), btnConnect = $('#btnConnect');
-  const emailEl = $('#email'), passwordEl = $('#password'), btnSignIn = $('#btnSignIn'), authStatus = $('#authStatus');
+  const supabaseUrlEl = $('#supabaseUrl'), supabaseKeyEl = $('#supabaseKey');
+  const authStatus = $('#authStatus'), connStatus = $('#connStatus');
 
-  // load saved / defaults
-  supabaseUrlEl.value = localStorage.getItem('sb_url') || DEFAULT_SUPABASE_URL;
-  supabaseKeyEl.value = localStorage.getItem('sb_key') || DEFAULT_ANON_KEY;
-
-  btnConnect.addEventListener('click', ()=>{
-    const url = supabaseUrlEl.value.trim() || DEFAULT_SUPABASE_URL;
-    const key = supabaseKeyEl.value.trim() || DEFAULT_ANON_KEY;
+  // יצירת לקוח Supabase
+  function initSupabaseClient(){
+    const url = (supabaseUrlEl.value || '').trim() || DEFAULT_SUPABASE_URL;
+    const key = (supabaseKeyEl.value || '').trim() || DEFAULT_ANON_KEY;
+    if(!url || !key){ connStatus.textContent = 'חסר URL או Anon Key'; return; }
     supabase = window.Supabase.createClient(url, key);
-    localStorage.setItem('sb_url', url); localStorage.setItem('sb_key', key);
-    alert('חיבור נשמר.');
-  });
+    localStorage.setItem('sb_url', url);
+    localStorage.setItem('sb_key', key);
+    connStatus.textContent = 'מחובר ל-Supabase';
+  }
 
-  btnSignIn.addEventListener('click', async ()=>{
-    if(!supabase){ alert('תחילה שמור/י חיבור ל-Supabase'); return; }
-    const email = emailEl.value.trim(); const password = passwordEl.value.trim();
+  // טעינת ערכים + התחברות אוטומטית בזמן טעינת הדף
+  function loadAndConnect(){
+    supabaseUrlEl.value = localStorage.getItem('sb_url') || DEFAULT_SUPABASE_URL;
+    supabaseKeyEl.value = localStorage.getItem('sb_key') || DEFAULT_ANON_KEY;
+    initSupabaseClient();
+  }
+
+  // התחברות (Email/Password)
+  $('#btnSignIn').addEventListener('click', async ()=>{
+    if(!supabase){ initSupabaseClient(); }
+    const email = ($('#email').value || '').trim();
+    const password = ($('#password').value || '').trim();
     if(!email || !password){ alert('נא למלא אימייל וסיסמה'); return; }
     const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
     if(signInErr){
@@ -164,7 +175,13 @@
     }
   });
 
-  // HTML parsing & mapping
+  // חיבור מחדש אוטומטי כשמשנים URL/Key (בלי כפתור)
+  ['change','blur','input'].forEach(evt=>{
+    supabaseUrlEl.addEventListener(evt, ()=>{ initSupabaseClient(); });
+    supabaseKeyEl.addEventListener(evt, ()=>{ initSupabaseClient(); });
+  });
+
+  // ===== HTML parsing & mapping =====
   const fileInput = $('#fileInput'), tableSelect = $('#tableSelect');
   const dateSelect = $('#dateSelect'), nameSelect = $('#nameSelect'), amountSelect = $('#amountSelect');
   const btnPreview = $('#btnPreview'), btnImport = $('#btnImport'), importStatus = $('#importStatus');
@@ -220,7 +237,7 @@
   }
 
   btnImport.addEventListener('click', async ()=>{
-    if(!supabase){ alert('לא מחובר ל-Supabase'); return; }
+    if(!supabase){ initSupabaseClient(); }
     const { data: session } = await supabase.auth.getSession();
     if(!session || !session.session){ alert('יש להתחבר (Email+Password)'); return; }
 
@@ -252,13 +269,13 @@
     await refreshCustomers();
   });
 
-  // Customers list & details
+  // ===== Customers list & details =====
   const customersWrap = $('#customersWrap'), customerCard = $('#customerCard'), custTitle = $('#custTitle'), btnBack = $('#btnBack'), couponsWrap = $('#couponsWrap');
   const btnRefresh = $('#btnRefresh');
   btnRefresh.addEventListener('click', refreshCustomers);
 
   async function refreshCustomers(){
-    if(!supabase) return;
+    if(!supabase){ initSupabaseClient(); }
     const { data, error } = await supabase.from('customer_balances').select('*').order('name');
     if(error){ customersWrap.innerHTML = '<span class="bad">שגיאה בקריאת נתונים: '+error.message+'</span>'; return; }
     let html = '<table><thead><tr><th>לקוח</th><th>סה\"כ נטען</th><th>סה\"כ מומש</th><th>יתרה זמינה</th><th></th></tr></thead><tbody>';
@@ -277,6 +294,7 @@
   }
 
   async function openCustomer(customerId){
+    if(!supabase){ initSupabaseClient(); }
     const { data: cust, error: ce } = await supabase.from('customers').select('id,name').eq('id', customerId).single();
     if(ce){ alert('שגיאה: '+ce.message); return; }
     custTitle.textContent = 'לקוח: ' + cust.name;
@@ -319,9 +337,10 @@
     });
   }
 
-  btnBack.addEventListener('click', ()=>{ customerCard.style.display = 'none'; });
+  $('#btnBack').addEventListener('click', ()=>{ customerCard.style.display = 'none'; });
 
   async function markRedeemed(couponId){
+    if(!supabase){ initSupabaseClient(); }
     const { error } = await supabase.from('coupons').update({ redeemed:true, redeemed_at:new Date().toISOString() }).eq('id', couponId);
     if(error){ alert('שגיאת עדכון: '+error.message); return; }
     const name = $('#custTitle').textContent.replace('לקוח: ','').trim();
@@ -329,6 +348,9 @@
     if(cust) openCustomer(cust.id);
     refreshCustomers();
   }
+
+  // הפעלה אוטומטית בעת טעינת הדף
+  document.addEventListener('DOMContentLoaded', loadAndConnect);
 </script>
 </body>
 </html>
