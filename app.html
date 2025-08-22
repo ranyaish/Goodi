@@ -1,291 +1,193 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="he" dir="rtl">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
-<meta http-equiv="Pragma" content="no-cache"/>
-<meta http-equiv="Expires" content="0"/>
-<title>גודי שוברים - מערכת ניהול</title>
-
-<script>
-// ===== גרסה לעקיפת קאש =====
-window.APP_VERSION = "v11-2025-08-22-17-05";
-
-// ===== טעינת supabase-js עם גיבוי ופרמטר גרסה =====
-(function loadSupabase(){
-  const v="?v="+window.APP_VERSION;
-  const urls=[
-    "https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"+v,
-    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"+v
-  ];
-  (function go(i){
-    if(i>=urls.length){ document.dispatchEvent(new Event("supabase-ready")); return; }
-    const s=document.createElement("script");
-    s.src=urls[i]; s.async=true;
-    s.onload=()=>document.dispatchEvent(new Event("supabase-ready"));
-    s.onerror=()=>go(i+1);
-    document.head.appendChild(s);
-  })(0);
-})();
-</script>
-
-<style>
-:root{--line:#e5e7eb;--text:#0f172a;--muted:#5b6b7a;--blue:#0ea5e9}
-*{box-sizing:border-box}
-body{margin:0;background:#fff;color:var(--text);font-family:system-ui,Heebo,Arial}
-header{display:flex;align-items:center;gap:12px;position:sticky;top:0;background:#fff;padding:12px 16px;border-bottom:1px solid var(--line);z-index:10}
-header img{height:42px;width:auto}
-.container{max-width:860px;margin:20px auto;padding:0 16px}
-.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
-label{display:block;color:var(--muted);font-size:14px;margin-bottom:6px}
-input{width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--text)}
-button{cursor:pointer;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--text);padding:10px 14px}
-button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
-button.small{padding:6px 10px;font-size:13px}
-table{width:100%;border-collapse:collapse;margin-top:10px}
-th,td{padding:8px;border-bottom:1px solid var(--line);text-align:right}
-thead th{background:#f8fafc;position:sticky;top:64px}
-.badge{padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:12px}
-.hint{color:var(--muted);font-size:13px}
-
-/* מודאל */
-.modal-b{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:9999}
-.modal{background:#fff;border:1px solid var(--line);border-radius:14px;max-width:460px;width:92%;padding:14px}
-.list{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:10px}
-.list button{display:block;width:100%;text-align:right;border:0;border-bottom:1px solid var(--line);background:#fff;padding:10px}
-.list button:last-child{border-bottom:0}
-
-/* דיבאג */
-.debug{max-width:860px;margin:10px auto 30px;padding:10px 16px;border-top:1px dashed #ddd;color:#475569;font-size:12px}
-.debug details{background:#fafafa;border:1px solid #eee;border-radius:10px;padding:8px}
-.debug code{background:#f3f4f6;padding:1px 4px;border-radius:4px}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>גודי שוברים - מערכת ניהול</title>
+  <style>
+    body{font-family:system-ui,Arial,Heebo,sans-serif;background:#fff;color:#111;margin:0}
+    header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #eee}
+    .brand{display:flex;gap:12px;align-items:center}
+    .brand img{width:44px;height:44px;border-radius:6px;object-fit:cover}
+    h1{font-size:22px;margin:0}
+    .wrap{max-width:920px;margin:20px auto;padding:0 14px}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px;margin:12px 0}
+    button{border:1px solid #e5e7eb;background:#0ea5e9;color:#fff;border-radius:10px;padding:10px 14px;cursor:pointer}
+    button.ghost{background:#fff;color:#111}
+    .muted{color:#6b7280;font-size:14px}
+    .list{list-style:none;padding:0;margin:10px 0 0}
+    .list li{padding:6px 0;border-bottom:1px dashed #eee}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .spacer{flex:1}
+    .pill{font-size:12px;background:#f1f5f9;border:1px solid #e5e7eb;border-radius:999px;padding:3px 8px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px;border-bottom:1px solid #eee;text-align:right}
+    thead th{background:#f8fafc}
+  </style>
+  <!-- Supabase JS (UMD) -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 </head>
 <body>
-<header>
-  <img id="logo" alt="לוגו">
-  <h2 style="margin:0">גודי שוברים - מערכת ניהול</h2>
-  <div style="flex:1"></div>
-  <button id="btnLogout" type="button" class="small" title="יציאה">יציאה</button>
-</header>
+  <header>
+    <div class="brand">
+      <img src="logo.png" alt="לוגו" />
+      <h1>גודי שוברים - מערכת ניהול</h1>
+    </div>
+    <div class="row">
+      <button id="logoutBtn" class="ghost">יציאה</button>
+    </div>
+  </header>
 
-<div class="container">
-  <!-- לוגין מקומי (במקום Supabase Auth) -->
-  <div class="card" id="localAuthCard">
-    <h3 style="margin:0 0 8px 0">כניסה</h3>
-    <div style="display:grid;gap:8px;grid-template-columns:1fr 1fr;align-items:end">
-      <div>
-        <label>שם משתמש</label>
-        <input id="localUser" placeholder="admin"/>
+  <div class="wrap">
+    <!-- לוג עדכונים אחרונים -->
+    <div class="card">
+      <div class="row">
+        <strong>לוג עדכונים אחרונים</strong>
+        <span id="logMeta" class="pill">—</span>
+        <div class="spacer"></div>
+        <button id="refreshLog" class="ghost">רענן</button>
       </div>
-      <div>
-        <label>סיסמה</label>
-        <input id="localPass" type="password" placeholder="1234"/>
+      <ul id="logList" class="list">
+        <li class="muted">טוען…</li>
+      </ul>
+    </div>
+
+    <!-- בחירת לקוח -->
+    <div class="card">
+      <div class="row" style="margin-bottom:10px">
+        <button id="pickCustomer">בחר לקוח</button>
+        <div class="spacer"></div>
+        <span class="muted">לקוח נוכחי</span>
       </div>
+      <input id="currentCustomer" class="muted" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px" placeholder="לא נבחר" disabled />
+      <div id="customerSummary" class="muted" style="margin-top:8px">—</div>
     </div>
-    <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
-      <button id="btnLocalLogin" class="primary">התחבר</button>
-      <span id="localAuthMsg" class="hint"></span>
+
+    <!-- טבלת שוברים -->
+    <div id="customerCoupons" class="card" style="display:none">
+      <div class="row">
+        <strong>שוברים</strong>
+        <div class="spacer"></div>
+        <span id="couponMeta" class="pill">—</span>
+      </div>
+      <div id="couponTable" style="margin-top:8px"></div>
     </div>
   </div>
 
-  <!-- כרטיס עבודה -->
-  <div class="card" id="workCard" style="display:none">
-    <div style="margin-bottom:10px">
-      <button id="btnPick" type="button" class="primary">בחר לקוח</button>
-    </div>
-    <label>לקוח נוכחי</label>
-    <input id="currentCustomer" placeholder="לא נבחר" disabled/>
-    <div id="connStatus" class="hint" style="margin-top:8px">—</div>
-  </div>
-
-  <div class="card" id="custCard" style="display:none">
-    <h3 id="custTitle" style="margin:0 0 6px 0">לקוח</h3>
-    <div id="couponTable"></div>
-  </div>
-</div>
-
-<!-- מודאל בחירת לקוח -->
-<div id="modalPick" class="modal-b" role="dialog" aria-modal="true">
-  <div class="modal">
-    <h3 style="margin:0 0 8px 0">בחר לקוח</h3>
-    <input id="searchInput" placeholder="חפש לקוח…" style="width:100%;margin-bottom:10px;padding:10px;border:1px solid var(--line);border-radius:10px"/>
-    <div id="listWrap" class="list"></div>
-    <div style="text-align:left;margin-top:8px"><button id="btnCloseModal" type="button" class="small">סגור</button></div>
-  </div>
-</div>
-
-<!-- דיבאג -->
-<div class="debug">
-  <details open>
-    <summary>דיבאג</summary>
-    <div>גרסה: <code id="v"></code></div>
-    <div>סטטוס: <span id="dbgStatus">—</span></div>
-    <div>customers: <span id="dbgCustCount">0</span></div>
-    <div>שגיאה אחרונה: <code id="dbgErr">—</code></div>
-  </details>
-</div>
-
-<script>
-/* ===== תצורה ===== */
-// משתמש/סיסמה מקומיים — שנה כרצונך
-const LOCAL_USER="admin";
-const LOCAL_PASS="1234";
-
-// Supabase — לשאילתות DB בלבד (ללא Auth)
-const SB_URL  = "https://ylqpxwgchwalcblfipsu.supabase.co";
+  <script>
+    // ===== חיבור ל-Supabase לקריאה (anon) =====
+    const SUPABASE_URL  = "https://ylqpxwgchwalcblfipsu.supabase.co";
 const SB_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM";
+    const supabase = window.Supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
-/* ===== עזר ===== */
-const $=s=>document.querySelector(s);
-const fmtILS=n=>new Intl.NumberFormat('he-IL',{style:'currency',currency:'ILS'}).format(Number(n||0));
-const isoToDDMMYYYY=iso=>{ if(!iso) return ''; const [y,m,d]=String(iso).split('-'); return `${d.padStart(2,'0')}/${m.padStart(2,'0')}/${y}`; };
-const safeMsg=e=>(e&&(e.message||e.statusText||e.name))||String(e||'Unknown');
-const setDbg=(k,v)=>{ const el=$("#"+k); if(el) el.textContent=v; };
+    // יציאה — ניקוי סטורג'
+    document.getElementById("logoutBtn").onclick = () => {
+      try { localStorage.clear(); sessionStorage.clear(); } catch(_) {}
+      location.reload();
+    };
 
-$("#v").textContent = window.APP_VERSION||'';
-document.getElementById('logo').src = "logo.png?v="+(window.APP_VERSION||'');
+    // ===== לוג 5 ריצות אחרונות =====
+    async function loadImportLogs() {
+      const $list = document.getElementById("logList");
+      const $meta = document.getElementById("logMeta");
+      $list.innerHTML = '<li class="muted">טוען…</li>';
 
-let sb=null, customers=[], loggedIn=false;
+      const { data, error } = await supabase
+        .from("import_logs")
+        .select("*")
+        .order("run_time", { ascending: false })
+        .limit(5);
 
-/* ===== אתחול Supabase ===== */
-document.addEventListener('supabase-ready', ()=>{
-  if(!window.supabase){ alert("ספריית Supabase לא נטענה"); return; }
-  sb = window.supabase.createClient(SB_URL, SB_ANON);
-  $("#connStatus").textContent='חיבור ל־Supabase מוכן';
-});
+      if (error) {
+        $list.innerHTML = `<li class="muted">שגיאה בטעינת לוגים</li>`;
+        $meta.textContent = "שגיאה";
+        return;
+      }
 
-/* ===== לוגין מקומי ===== */
-$("#btnLocalLogin").addEventListener('click', doLocalLogin);
-$("#localPass").addEventListener('keydown', e=>{ if(e.key==='Enter') doLocalLogin(); });
-$("#localUser").addEventListener('keydown', e=>{ if(e.key==='Enter') doLocalLogin(); });
+      if (!data || !data.length) {
+        $list.innerHTML = `<li class="muted">אין ריצות קודמות</li>`;
+        $meta.textContent = "0";
+        return;
+      }
 
-function doLocalLogin(){
-  const u=$("#localUser").value.trim();
-  const p=$("#localPass").value;
-  if(u===LOCAL_USER && p===LOCAL_PASS){
-    loggedIn=true;
-    $("#localAuthMsg").textContent='';
-    $("#localAuthCard").style.display='none';
-    $("#workCard").style.display='block';
-    setDbg("dbgStatus","נכנסת (לוגין מקומי)");
-    loadCustomersAll();
-  }else{
-    $("#localAuthMsg").textContent="פרטי כניסה שגויים";
-  }
-}
-
-/* ===== יציאה ===== */
-document.getElementById('btnLogout').addEventListener('click', ()=>{
-  loggedIn=false;
-  $("#workCard").style.display='none';
-  $("#custCard").style.display='none';
-  $("#localAuthCard").style.display='block';
-  $("#localPass").value='';
-});
-
-/* ===== טעינת לקוחות מה-DB ===== */
-async function loadCustomersAll(){
-  if(!loggedIn) return;
-  try{
-    setDbg("dbgStatus","טוען לקוחות...");
-    const r = await sb.from('customers').select('customer_id,name').order('name');
-    if(r.error) throw r.error;
-    customers = (r.data||[]).map(x=>({customer_id:x.customer_id, name:x.name||('לקוח #'+x.customer_id)}));
-    setDbg("dbgCustCount", customers.length);
-    $("#connStatus").textContent = customers.length ? `נטענו ${customers.length} לקוחות` : 'אין רשומות בטבלת customers.';
-  }catch(e){
-    $("#connStatus").textContent='שגיאת טעינת לקוחות: '+safeMsg(e);
-    setDbg("dbgErr", safeMsg(e));
-  }
-}
-
-/* ===== בחירת לקוח ===== */
-function openModal(){
-  if(!loggedIn) return;
-  $("#modalPick").style.display='flex';
-  $("#searchInput").value='';
-  $("#searchInput").focus();
-  renderList(customers);
-}
-function closeModal(){ $("#modalPick").style.display='none'; }
-document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeModal(); });
-
-$("#btnPick").addEventListener('click', openModal);
-$("#btnCloseModal").addEventListener('click', closeModal);
-
-$("#searchInput").addEventListener('input', ()=>{
-  const q=$("#searchInput").value.toLowerCase().trim();
-  const list=!q?customers:customers.filter(c=>(c.name||'').toLowerCase().includes(q));
-  renderList(list);
-});
-function renderList(list){
-  const el=$("#listWrap");
-  if(!list.length){ el.innerHTML='<div style="padding:10px;color:#666">לא נמצאו לקוחות</div>'; return; }
-  el.innerHTML=list.map(c=>`<button type="button" data-id="${c.customer_id}" data-name="${c.name}">${c.name}</button>`).join('');
-}
-document.getElementById('listWrap').addEventListener('click', ev=>{
-  const b=ev.target.closest('button[data-id]'); if(!b) return;
-  const id=b.dataset.id, nm=b.dataset.name;
-  $("#currentCustomer").value=nm;
-  closeModal();
-  openCustomer(id, nm);
-});
-
-/* ===== כרטיס לקוח + שוברים ===== */
-async function openCustomer(customerId, nameFromList){
-  if(!loggedIn) return;
-  try{
-    const r = await sb.from('coupons')
-      .select('id,date,amount,redeemed,redeemed_at')
-      .eq('customer_id', customerId)
-      .order('date',{ascending:false});
-    if(r.error) throw r.error;
-
-    $("#custTitle").textContent='לקוח: '+(nameFromList||'');
-    const rows=r.data||[];
-    if(rows.length===0){
-      $("#couponTable").innerHTML='<div class="hint">אין שוברים ללקוח זה.</div>';
-      $("#custCard").style.display='block';
-      return;
+      $list.innerHTML = "";
+      data.forEach((log) => {
+        const li = document.createElement("li");
+        const dt = new Date(log.run_time).toLocaleString("he-IL");
+        li.textContent = `${dt} — ${log.records_imported} רשומות (${log.status})`;
+        $list.appendChild(li);
+      });
+      $meta.textContent = `סה״כ: ${data.length}`;
     }
-    let html='<table><thead><tr><th>תאריך</th><th>סכום</th><th>סטטוס</th><th>פעולה</th></tr></thead><tbody>';
-    rows.forEach(x=>{
-      const status = x.redeemed ? `✔️ <span class="badge">${x.redeemed_at? new Date(x.redeemed_at).toLocaleString('he-IL'):''}</span>` : '❌';
-      const label  = x.redeemed ? 'בטל מימוש' : 'סמן כמומש';
-      html+=`<tr>
-        <td>${isoToDDMMYYYY(x.date)}</td>
-        <td>${fmtILS(x.amount)}</td>
-        <td>${status}</td>
-        <td><button type="button" class="toggle" data-id="${x.id}" data-state="${x.redeemed?1:0}" data-cid="${customerId}">${label}</button></td>
-      </tr>`;
-    });
-    html+='</tbody></table>';
-    $("#couponTable").innerHTML=html;
-    $("#custCard").style.display='block';
-  }catch(e){
-    alert('שגיאת קריאה: '+safeMsg(e));
-    setDbg("dbgErr", safeMsg(e));
-  }
-}
+    document.getElementById("refreshLog").onclick = loadImportLogs;
 
-/* ===== שינוי סטטוס מימוש ===== */
-document.addEventListener('click', async ev=>{
-  const b=ev.target.closest('button.toggle'); if(!b) return;
-  const id=parseInt(b.dataset.id,10), isRed=b.dataset.state==='1', cid=b.dataset.cid;
-  try{
-    if(isRed){
-      const nm=prompt('לבטל מימוש?\nהכנס/י שם מבטל (בעברית):'); if(!nm) return;
-      if(!/[\u0590-\u05FF]/.test(nm)){ alert('נא להזין שם בעברית'); return; }
+    // ===== בחירת לקוח לדוגמה + טעינת שוברים =====
+    async function pickCustomer() {
+      const { data, error } = await supabase
+        .from("customers")
+        .select("customer_id,name")
+        .order("name", { ascending: true })
+        .limit(1);
+
+      if (error || !data || !data.length) {
+        alert("לא נמצאו לקוחות");
+        return;
+      }
+
+      const customer = data[0];
+      document.getElementById("currentCustomer").value = customer.name || "(ללא שם)";
+      document.getElementById("customerSummary").textContent = `מזהה: ${customer.customer_id || "-"}`;
+
+      const { data: coupons, error: cErr } = await supabase
+        .from("coupons")
+        .select("id,date,amount,redeemed,redeemed_at")
+        .eq("customer_id", customer.customer_id)
+        .order("date", { ascending: false });
+
+      const $wrap = document.getElementById("customerCoupons");
+      const $tbl  = document.getElementById("couponTable");
+      const $meta = document.getElementById("couponMeta");
+
+      if (cErr) {
+        $wrap.style.display = "block";
+        $tbl.innerHTML = `<div class="muted">שגיאה בטעינת שוברים</div>`;
+        $meta.textContent = "שגיאה";
+        return;
+      }
+
+      if (!coupons || !coupons.length) {
+        $wrap.style.display = "block";
+        $tbl.innerHTML = `<div class="muted">אין שוברים ללקוח</div>`;
+        $meta.textContent = "0";
+        return;
+      }
+
+      const rows = coupons.map(c =>
+        `<tr>
+          <td>${new Date(c.date).toLocaleDateString("he-IL")}</td>
+          <td>₪ ${Number(c.amount || 0).toFixed(2)}</td>
+          <td>${c.redeemed ? "✔︎" : "—"}</td>
+        </tr>`
+      ).join("");
+
+      $wrap.style.display = "block";
+      $meta.textContent = `${coupons.length}`;
+      $tbl.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>תאריך</th>
+              <th>סכום</th>
+              <th>מומש</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>`;
     }
-    const patch=isRed?{redeemed:false,redeemed_at:null}:{redeemed:true,redeemed_at:new Date().toISOString()};
-    const { error } = await sb.from('coupons').update(patch).eq('id', id);
-    if(error) throw error;
-    const name=$("#currentCustomer").value;
-    openCustomer(cid, name);
-  }catch(e){ alert('שגיאת עדכון: '+safeMsg(e)); setDbg("dbgErr", safeMsg(e)); }
-});
-</script>
+    document.getElementById("pickCustomer").onclick = pickCustomer;
+
+    // טעינת הלוגים בכניסה
+    loadImportLogs();
+  </script>
 </body>
 </html>
