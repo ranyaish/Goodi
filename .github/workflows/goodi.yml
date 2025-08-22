@@ -1,14 +1,12 @@
+# .github/workflows/goodi.yml
 name: Goodi Daily Import
 
 on:
-  # הרצה ידנית מה-UI
   workflow_dispatch: {}
-  # תזמון אוטומטי: 11:00 ו-20:00 UTC (≈ 14:00 ו-23:00 בישראל בקיץ)
   schedule:
     - cron: "0 11 * * *"
     - cron: "0 20 * * *"
 
-# מונע חפיפה אם ריצה אחת עדיין נמשכת
 concurrency:
   group: goodi-daily-import
   cancel-in-progress: false
@@ -34,8 +32,18 @@ jobs:
 
       - name: Run scraper
         env:
+          GOODI_URL: ${{ secrets.GOODI_URL }}
           GOODI_USER: ${{ secrets.GOODI_USER }}
           GOODI_PASS: ${{ secrets.GOODI_PASS }}
           SB_URL: ${{ secrets.SB_URL }}
           SB_SERVICE_KEY: ${{ secrets.SB_SERVICE_KEY }}
         run: npm run scrape
+
+      - name: Upload artifacts (screenshots/html/json)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: goodi-artifacts
+          path: artifacts/**
+          if-no-files-found: ignore
+          retention-days: 10
