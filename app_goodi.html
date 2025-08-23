@@ -86,6 +86,44 @@
   </style>
   <!-- Supabase JS (UMD) -->
   <script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+
+
+<!-- ספריית UMD נטענת מתוך supabaseClient.js, לא צריך לטעון כאן שוב -->
+<script src="./supabaseClient.js?v=14.3"></script>
+
+<script>
+  // בדיקת חיבור קצרה – לפני המשך הרצת האפליקציה
+  (async () => {
+    const box = document.createElement('div');
+    box.style.cssText = "direction:ltr;font:14px/1.4 monospace;background:#0b1221;color:#bfe1ff;padding:8px 12px;border-radius:10px;margin:8px 0";
+    box.textContent = 'connecting…';
+    document.body.prepend(box);
+
+    const r = await window.supabaseReady;
+    if (!r.ok) {
+      box.textContent = 'supabase bootstrap ERROR: ' + (r.error?.message || r.error);
+      return; // אל תמשיך לוגיקה של האפליקציה אם אין חיבור
+    }
+
+    try {
+      // בדיקת SELECT קלה לא תעצור את הדף אם RLS חוסם – רק תציג הודעה
+      const { count, error } = await window.supabaseClient
+        .from('customers')
+        .select('id', { count: 'exact', head: true });
+
+      if (error) {
+        box.textContent = 'connected, but SELECT error: ' + (error.message || JSON.stringify(error));
+      } else {
+        box.textContent = 'connected ✓   customers count (head): ' + (count ?? 'N/A');
+      }
+    } catch (e) {
+      box.textContent = 'query exception: ' + e.message;
+    }
+  })();
+</script>
+
+
+
 </head>
 <body>
   <header>
