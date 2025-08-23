@@ -1,33 +1,307 @@
-// 1) יצירת/איתור לקוח תאגידי לפי שם
-const { data: corpCustomerId, error: e1 } = await supabase.rpc('corp_get_or_create_customer', { p_name: 'דן אלמוני' });
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>שוברים תאגידיים (תן-ביס/סיבוס) — v1</title>
+  <link rel="icon" href="logo.png" />
+  <style>
+    :root{--border:#e5e7eb;--muted:#64748b;--brand:#0ea5e9;--text:#0f172a;--bg:#fff;--card:#fff}
+    html,body{background:var(--bg);color:var(--text);font-family:system-ui,Heebo,Arial,sans-serif;margin:0}
+    .container{max-width:920px;margin:20px auto;padding:0 16px}
+    header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+    header img{width:44px;height:44px;border-radius:8px;object-fit:cover}
+    h1{margin:0;font-size:22px}
+    .muted{color:var(--muted);font-size:14px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start}
+    .col{flex:1 1 220px}
+    input,select,button{font:inherit}
+    input,select{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;background:#fff}
+    button{border:1px solid var(--border);border-radius:10px;padding:10px 14px;background:var(--brand);color:#fff;cursor:pointer}
+    button.ghost{background:#fff;color:var(--text)}
+    button:disabled{opacity:.6;cursor:not-allowed}
+    .section-title{font-size:18px;margin:0 0 10px}
+    .pill{display:inline-block;border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12px;background:#f8fafc}
+    .empty{color:var(--muted);text-align:center;padding:28px;border:1px dashed var(--border);border-radius:12px;background:#fff}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px;border-bottom:1px solid var(--border);text-align:right}
+    thead tr{background:#f1f5f9}
+    .stats{display:flex;gap:12px;flex-wrap:wrap;margin:10px 0}
+    .stat{flex:1 1 160px;border:1px solid var(--border);border-radius:12px;padding:10px;background:#fff}
+    .stat .k{color:var(--muted);font-size:12px}
+    .stat .v{font-size:18px;font-weight:600}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <img src="logo.png" alt="לוגו" />
+      <div>
+        <h1>שוברים תאגידיים (תן-ביס/סיבוס)</h1>
+        <div class="muted">ניהול לקוחות, טעינות ומימושים — מודול מופרד מ-Goodi</div>
+      </div>
+      <div style="margin-inline-start:auto;display:flex;gap:8px;align-items:center">
+        <span class="pill">v1</span>
+        <button id="logout" class="ghost">יציאה</button>
+      </div>
+    </header>
 
-// 2) פתיחת שובר תאגידי
-const { error: e2 } = await supabase.from('corp_vouchers').insert({
-  corp_customer_id: corpCustomerId,
-  opened_at: '2025-08-23',      // או new Date().toISOString().slice(0,10)
-  initial_amount: 350.00,
-  note: 'הטענת תן-ביס'
-});
+    <!-- התחברות מקומית -->
+    <section id="login-card" class="card" style="display:none">
+      <h2 class="section-title">כניסה</h2>
+      <div class="row">
+        <div class="col">
+          <label>שם משתמש</label>
+          <input id="login-user" autocomplete="username" value="admin" />
+        </div>
+        <div class="col">
+          <label>סיסמה</label>
+          <input id="login-pass" type="password" autocomplete="current-password" value="1234" />
+        </div>
+        <div class="col" style="align-self:end">
+          <button id="login-btn">התחבר</button>
+        </div>
+      </div>
+      <div class="muted" style="margin-top:8px">* אימות לוקלי בלבד (לא Supabase Auth).</div>
+    </section>
 
-// 3) הוספת מימוש חלקי לשובר מסוים
-const { error: e3 } = await supabase.from('corp_redemptions').insert({
-  voucher_id: 123,               // ה-ID של השובר מ-corp_vouchers
-  redeemed_at: new Date().toISOString(),
-  amount: 45.00,
-  by_user: 'רן',
-  note: 'חשבון צהריים'
-});
+    <div id="app-wrap" style="display:none">
+      <!-- יצירת/איתור לקוח + טעינה -->
+      <section class="card">
+        <h2 class="section-title">פתיחת שובר ללקוח</h2>
+        <div class="row">
+          <div class="col">
+            <label>שם לקוח</label>
+            <input id="m_name" placeholder="לדוגמה: יוסי כהן"/>
+          </div>
+          <div class="col">
+            <label>סכום טעינה (₪)</label>
+            <input id="m_amount" type="number" step="0.01" min="0" placeholder="לדוגמה: 150"/>
+          </div>
+          <div class="col">
+            <label>תאריך טעינה</label>
+            <input id="m_opened" type="date"/>
+          </div>
+          <div class="col" style="align-self:end">
+            <button id="m_create">צור שובר</button>
+          </div>
+        </div>
 
-// 4) קריאת יתרות ללקוח (תאגידי בלבד)
-const { data: balances, error: e4 } = await supabase
-  .from('corp_balances_view')
-  .select('*')
-  .eq('corp_customer_id', corpCustomerId)
-  .order('opened_at', { ascending: false });
+        <!-- סיכומי לקוח -->
+        <div id="m_totals_wrap" class="stats" style="display:none">
+          <div class="stat">
+            <div class="k">סה״כ נטען</div>
+            <div id="m_total_initial" class="v">₪ 0.00</div>
+          </div>
+          <div class="stat">
+            <div class="k">סה״כ מומש</div>
+            <div id="m_total_redeemed" class="v">₪ 0.00</div>
+          </div>
+          <div class="stat">
+            <div class="k">יתרה שלא מומשה</div>
+            <div id="m_total_remaining" class="v">₪ 0.00</div>
+          </div>
+        </div>
+      </section>
 
-// 5) סיכום יתרה כולל ללקוח (תאגידי)
-const { data: totals, error: e5 } = await supabase
-  .from('corp_customer_balances_view')
-  .select('*')
-  .eq('corp_customer_id', corpCustomerId)
-  .single();
+      <!-- מימוש -->
+      <section class="card" style="margin-top:12px">
+        <h2 class="section-title">הוספת מימוש</h2>
+        <div class="row">
+          <div class="col">
+            <label>שוברים פתוחים ללקוח</label>
+            <select id="m_vouchers"></select>
+          </div>
+          <div class="col">
+            <label>מימוש (₪)</label>
+            <input id="m_redeem_amount" type="number" step="0.01" min="0" placeholder="לדוגמה: 40"/>
+          </div>
+          <div class="col">
+            <label>תאריך מימוש</label>
+            <input id="m_redeem_at" type="datetime-local"/>
+          </div>
+          <div class="col">
+            <label>שם מאשר/הערה</label>
+            <input id="m_by" placeholder="לדוגמה: רן / הערה"/>
+          </div>
+          <div class="col" style="align-self:end">
+            <button id="m_redeem">הוסף מימוש</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- פירוט שוברים -->
+      <section class="card" style="margin-top:12px">
+        <h2 class="section-title">כל השוברים ללקוח</h2>
+        <div id="m_list" style="margin-top:8px">
+          <div class="empty">הכנס שם לקוח כדי לראות נתונים.</div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Debug -->
+    <section id="debug-box" class="card" style="margin:12px 0">
+      <div class="row" style="align-items:center;gap:8px">
+        <div class="pill">corp.html v1</div>
+        <div id="ts-pill" class="pill"></div>
+        <div id="dbg-msg" class="muted"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Supabase client -->
+  <script type="module" src="./supabaseClient.js?v=corp1"></script>
+
+  <script type="module">
+    const LOCAL_USER='admin', LOCAL_PASS='1234', AUTH_KEY='goodi-authed';
+    const $ = s=>document.querySelector(s);
+    const ts = ()=> new Date().toLocaleString('he-IL',{hour12:false});
+    $('#ts-pill').textContent = ts();
+
+    import { supabase } from './supabaseClient.js';
+
+    function setAuthUI(){
+      const ok = localStorage.getItem(AUTH_KEY)==='1';
+      $('#login-card').style.display = ok ? 'none' : '';
+      $('#app-wrap').style.display   = ok ? '' : 'none';
+      $('#logout').style.display     = ok ? '' : 'none';
+      $('#dbg-msg').textContent = ok ? 'מחובר' : 'ממתין להתחברות';
+      if(ok){ /* optional init */ }
+    }
+    $('#login-btn')?.addEventListener('click', ()=>{
+      const u=$('#login-user').value.trim(), p=$('#login-pass').value.trim();
+      if(u===LOCAL_USER && p===LOCAL_PASS){ localStorage.setItem(AUTH_KEY,'1'); setAuthUI(); }
+      else alert('שם משתמש/סיסמה שגויים');
+    });
+    $('#logout').addEventListener('click', ()=>{ localStorage.removeItem(AUTH_KEY); location.reload(); });
+
+    // ====== CORP logic ======
+    const fmtILS = v => `₪ ${Number(v||0).toFixed(2)}`;
+    const toISODate = (d)=> (d?new Date(d):new Date()).toISOString().slice(0,10);
+    const toISODtLocal = (d)=>{
+      const x=d?new Date(d):new Date(); const pad=n=>String(n).padStart(2,'0');
+      return `${x.getFullYear()}-${pad(x.getMonth()+1)}-${pad(x.getDate())}T${pad(x.getHours())}:${pad(x.getMinutes())}`;
+    };
+    $('#m_opened').value = toISODate();
+    $('#m_redeem_at').value = toISODtLocal();
+
+    async function corpGetOrCreateCustomer(name){
+      const { data, error } = await supabase.rpc('corp_get_or_create_customer', { p_name: name });
+      if(error) throw error;
+      return data; // corp_customer_id
+    }
+
+    async function refreshFor(name){
+      if(!name){
+        $('#m_vouchers').innerHTML='';
+        $('#m_list').innerHTML='<div class="empty">הכנס שם לקוח.</div>';
+        $('#m_totals_wrap').style.display='none';
+        return;
+      }
+      try{
+        const cid = await corpGetOrCreateCustomer(name); // יוצר אם חסר
+
+        // Totals
+        const { data: totals, error: tErr } = await supabase
+          .from('corp_customer_balances_view')
+          .select('initial_total,redeemed_total,remaining_total')
+          .eq('corp_customer_id', cid)
+          .single();
+        if(tErr && tErr.code!=='PGRST116'){ throw tErr; }
+        const init = totals?.initial_total ?? 0;
+        const red  = totals?.redeemed_total ?? 0;
+        const rem  = totals?.remaining_total ?? 0;
+        $('#m_total_initial').textContent = fmtILS(init);
+        $('#m_total_redeemed').textContent = fmtILS(red);
+        $('#m_total_remaining').textContent = fmtILS(rem);
+        $('#m_totals_wrap').style.display = 'flex';
+
+        // Vouchers list + open dropdown
+        const { data, error } = await supabase
+          .from('corp_balances_view')
+          .select('*')
+          .eq('corp_customer_id', cid)
+          .order('opened_at', { ascending:false });
+        if(error) throw error;
+
+        const open = data.filter(x=>Number(x.remaining_amount)>0);
+        $('#m_vouchers').innerHTML = open.length
+          ? open.map(v=>`<option value="${v.voucher_id}">#${v.voucher_id} • ${v.opened_at} • יתרה ${fmtILS(v.remaining_amount)}</option>`).join('')
+          : `<option value="">אין שוברים פתוחים</option>`;
+
+        const rows = data.map(v=>`
+          <tr>
+            <td>${v.voucher_id}</td>
+            <td>${v.customer_name}</td>
+            <td>${v.opened_at}</td>
+            <td>${fmtILS(v.initial_amount)}</td>
+            <td>${fmtILS(v.redeemed_sum)}</td>
+            <td><strong>${fmtILS(v.remaining_amount)}</strong></td>
+            <td>${v.note??''}</td>
+          </tr>
+        `).join('');
+        $('#m_list').innerHTML = `
+          <div style="overflow:auto">
+            <table>
+              <thead>
+                <tr><th>#</th><th>לקוח</th><th>תאריך טעינה</th><th>סכום פתיחה</th><th>נצבר מומש</th><th>יתרה</th><th>הערה</th></tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>`;
+      }catch(e){
+        alert('שגיאה בטעינת נתונים: '+e.message);
+      }
+    }
+
+    // Create voucher (open)
+    $('#m_create').addEventListener('click', async ()=>{
+      const name=$('#m_name').value.trim();
+      const amount=Number($('#m_amount').value);
+      const opened=$('#m_opened').value;
+      if(!name || !amount || amount<=0 || !opened){ alert('שם לקוח, סכום ותאריך טעינה נדרשים'); return; }
+      try{
+        const cid = await corpGetOrCreateCustomer(name);
+        const { error } = await supabase.from('corp_vouchers').insert({
+          corp_customer_id: cid,
+          opened_at: opened,
+          initial_amount: amount,
+          note: 'corp_manual'
+        });
+        if(error) throw error;
+        await refreshFor(name);
+        alert('שובר נוצר');
+      }catch(e){ alert('שגיאה ביצירת שובר: '+e.message); }
+    });
+
+    // Add redemption
+    $('#m_redeem').addEventListener('click', async ()=>{
+      const name=$('#m_name').value.trim();
+      const vid = Number($('#m_vouchers').value);
+      const amt = Number($('#m_redeem_amount').value);
+      const when=$('#m_redeem_at').value;
+      const by  = $('#m_by').value.trim();
+      if(!name || !vid || !amt || amt<=0 || !when){ alert('בחר שובר, סכום ותאריך מימוש'); return; }
+      try{
+        const { error } = await supabase.from('corp_redemptions').insert({
+          voucher_id: vid,
+          amount: amt,
+          redeemed_at: new Date(when).toISOString(),
+          by_user: by || null
+        });
+        if(error) throw error;
+        await refreshFor(name);
+        alert('מימוש נוסף');
+      }catch(e){ alert('שגיאה במימוש: '+e.message); }
+    });
+
+    // On name change/blur — refresh
+    $('#m_name').addEventListener('change', ()=> refreshFor($('#m_name').value.trim()));
+    $('#m_name').addEventListener('blur',   ()=> refreshFor($('#m_name').value.trim()));
+
+    // INIT
+    setAuthUI();
+  </script>
+</body>
+</html>
