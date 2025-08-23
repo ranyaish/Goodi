@@ -1,37 +1,61 @@
-
-
-<div id="last-run" style="margin:10px 0;padding:10px;border:1px solid #ccc;border-radius:8px;background:#f9f9f9;font-size:14px;">
-  טוען סטטוס ריצה אחרונה...
+<!-- ====== GitHub Actions: ריצה אחרונה ====== -->
+<div id="wf-last" style="max-width:680px;margin:12px auto 0;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;direction:rtl">
+  <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+    <div>
+      <span style="color:#6b7280">גרסת ריצה:</span>
+      <span id="wf-run" style="font-family:ui-monospace,Menlo,Consolas,monospace">—</span>
+      <span id="wf-status" style="border:1px solid #e5e7eb;border-radius:999px;padding:3px 8px;font-size:12px;color:#6b7280">—</span>
+    </div>
+    <small id="wf-time" style="color:#6b7280">—</small>
+  </div>
+  <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <span style="color:#6b7280">אירוע:</span><span id="wf-event" style="font-family:ui-monospace,Menlo,Consolas,monospace">—</span>
+    <span style="color:#6b7280;margin-inline-start:10px">קישור:</span>
+    <a id="wf-url" target="_blank" rel="noopener" style="color:#2563eb;text-decoration:none">—</a>
+  </div>
+  <div id="wf-err" style="display:none;margin-top:6px;color:#991b1b;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:6px 8px;font-family:ui-monospace,Menlo,Consolas,monospace"></div>
+  <div style="margin-top:8px"><small style="color:#6b7280">מתעדכן כל 5 דק’</small></div>
 </div>
 
 <script>
-async function loadLastRun() {
-  try {
-    const resp = await fetch("https://api.github.com/repos/ranyaish/Goodi/actions/runs?per_page=1");
-    const data = await resp.json();
-    if (!data.workflow_runs || !data.workflow_runs.length) {
-      document.getElementById("last-run").innerText = "לא נמצאו ריצות.";
-      return;
+(async function initWf(){
+  const repo = 'ranyaish/Goodi'; // הקפד על רישיות מדויקות
+  const url  = `https://api.github.com/repos/${repo}/actions/runs?per_page=1`;
+
+  const $ = id => document.getElementById(id);
+  const pill=$('wf-status'), run=$('wf-run'), time=$('wf-time'), ev=$('wf-event'), a=$('wf-url'), errBox=$('wf-err');
+
+  async function load(){
+    try{
+      const r = await fetch(url, { headers: { 'Accept':'application/vnd.github+json' }, cache:'no-store' });
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const data = await r.json();
+      const runObj = (data.workflow_runs && data.workflow_runs[0]) || null;
+      if(!runObj) throw new Error('לא נמצאו ריצות');
+
+      run.textContent  = 'run #'+ runObj.run_number;
+      ev.textContent   = runObj.event;
+      time.textContent = new Date(runObj.created_at).toLocaleString('he-IL', { hour12:false });
+      a.textContent    = 'פתח לוג';
+      a.href           = runObj.html_url;
+
+      const status = (runObj.conclusion || runObj.status || '').toLowerCase();
+      pill.textContent = status || '—';
+      pill.style.background = status==='success' ? '#ecfdf5' : (status==='failure'||status==='cancelled' ? '#fef2f2' : '#f3f4f6');
+      pill.style.color      = status==='success' ? '#065f46' : (status==='failure'||status==='cancelled' ? '#991b1b' : '#374151');
+      pill.style.borderColor= status==='success' ? '#a7f3d0' : (status==='failure'||status==='cancelled' ? '#fecaca' : '#e5e7eb');
+
+      errBox.style.display='none';
+    }catch(e){
+      errBox.style.display='block';
+      errBox.textContent = 'שגיאה: ' + (e && e.message ? e.message : String(e));
     }
-    const run = data.workflow_runs[0];
-    const status = run.conclusion || run.status;
-    const created = new Date(run.created_at).toLocaleString("he-IL");
-    const url = run.html_url;
-    document.getElementById("last-run").innerHTML =
-      `ריצה אחרונה: <a href="${url}" target="_blank">#${run.run_number}</a><br>` +
-      `תאריך: ${created}<br>` +
-      `סטטוס: ${status}`;
-  } catch (e) {
-    document.getElementById("last-run").innerText = "שגיאה בטעינת ריצה אחרונה.";
   }
-}
-loadLastRun();
+  load();
+  setInterval(load, 5*60*1000);
+})();
 </script>
-<!-- לוג ריצה אחרונה של GitHub Actions -->
-<iframe
-  src="./wf-last-widget.html"
-  style="width:100%;max-width:680px;height:140px;border:0;display:block;margin:12px auto;">
-</iframe>
+<!-- ====== /GitHub Actions: ריצה אחרונה ====== -->
 
 
 <!doctype html>
