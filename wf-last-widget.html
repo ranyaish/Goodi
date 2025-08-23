@@ -3,63 +3,84 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>לוג ריצה אחרונה</title>
+  <title>Goodi • לוג ריצה אחרונה</title>
   <style>
-    :root{--border:#e5e7eb;--muted:#64748b}
-    body{margin:0;font-family:system-ui,Heebo,Arial,sans-serif;background:#fff;color:#111}
-    .card{border:1px solid var(--border);border-radius:12px;padding:14px}
-    .title{display:flex;gap:8px;align-items:center;margin:0 0 10px}
-    .pill{display:inline-block;border:1px solid var(--border);border-radius:999px;padding:4px 10px;font-size:12px;background:#f8fafc}
-    a{color:#0ea5e9;text-decoration:none}
-    a:hover{text-decoration:underline}
-    .muted{color:var(--muted);font-size:14px}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .dot{width:10px;height:10px;border-radius:50%}
+    :root{--fg:#1f2937;--muted:#6b7280;--ok:#16a34a;--err:#dc2626;--bg:#ffffff}
+    body{margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--fg)}
+    .card{border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .k{color:var(--muted)}
+    .pill{font-size:12px;border-radius:999px;padding:3px 8px;border:1px solid #e5e7eb}
+    .ok{background:#ecfdf5;color:#065f46;border-color:#a7f3d0}
+    .err{background:#fef2f2;color:#991b1b;border-color:#fecaca}
+    .muted{color:var(--muted)}
+    small{color:var(--muted)}
+    a{color:#2563eb;text-decoration:none}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="title">
-      <strong>אוטומציה – ריצה אחרונה</strong>
-      <span id="updated" class="pill">טוען…</span>
+    <div id="row1" class="row" style="justify-content:space-between">
+      <div class="row">
+        <span class="k">גרסה:</span>
+        <span id="run_number" class="mono pill">—</span>
+        <span id="status_pill" class="pill muted">—</span>
+      </div>
+      <small id="created_at">—</small>
     </div>
-    <div id="content" class="muted">מביא נתונים…</div>
+    <div class="row" style="margin-top:6px">
+      <span class="k">אירוע:</span><span id="event" class="mono">—</span>
+      <span class="k" style="margin-inline-start:10px">קישור:</span>
+      <a id="run_url" target="_blank" rel="noopener">—</a>
+    </div>
+    <div id="err" class="row" style="margin-top:6px;display:none">
+      <span class="pill err">שגיאה</span>
+      <span id="err_msg" class="mono"></span>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <small class="muted">מתעדכן אוטומטית כל 5 דק’</small>
+    </div>
   </div>
 
   <script>
-  async function loadLastRun(){
-    const url = "https://raw.githubusercontent.com/ranyaish/Goodi/main/.wf-last.json?cb="+Date.now();
-    const $u = document.getElementById('updated');
-    const $c = document.getElementById('content');
-    try{
-      const res = await fetch(url, { cache:'no-store' });
-      if(!res.ok) throw new Error('HTTP '+res.status);
-      const d = await res.json();
-      const when = new Date(d.created_at).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' });
-      const ok = d.status === 'success';
-      const inProg = d.status && !['success','failure','cancelled','timed_out'].includes(d.status);
-      const color = ok ? '#16a34a' : (inProg ? '#f59e0b' : '#dc2626');
-      const hebStatus = ok ? '✔️ הצלחה' : (inProg ? '⏳ בתהליך' : '❌ כשל');
+    async function loadLastRun(){
+      const url = 'https://api.github.com/repos/ranyaish/Goodi/actions/runs?per_page=1';
+      const runNumber = document.getElementById('run_number');
+      const statusPill = document.getElementById('status_pill');
+      const createdAt = document.getElementById('created_at');
+      const event = document.getElementById('event');
+      const runUrl = document.getElementById('run_url');
+      const errBox = document.getElementById('err');
+      const errMsg = document.getElementById('err_msg');
 
-      $u.textContent = 'עודכן: ' + when;
-      $c.innerHTML = `
-        <div class="row">
-          <span class="dot" style="background:${color}"></span>
-          <div>
-            <div><strong>סטטוס:</strong> ${hebStatus}</div>
-            <div class="muted">אירוע: ${d.event} · ריצה #${d.run_number}</div>
-            <div style="margin-top:6px">
-              <a href="${d.url}" target="_blank" rel="noopener">פתח ב-GitHub ↗</a>
-            </div>
-          </div>
-        </div>
-      `;
-    }catch(e){
-      $u.textContent = 'שגיאה';
-      $c.textContent = 'לא מצליח לטעון את לוג הריצה האחרונה.';
+      try{
+        const r = await fetch(url, {headers:{'Accept':'application/vnd.github+json'}});
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        const data = await r.json();
+        if(!data.workflow_runs || !data.workflow_runs.length) throw new Error('לא נמצאו ריצות');
+
+        const run = data.workflow_runs[0];
+        runNumber.textContent = 'run #'+run.run_number;
+        event.textContent = run.event;
+        createdAt.textContent = new Date(run.created_at).toLocaleString('he-IL',{hour12:false});
+        runUrl.textContent = 'פתח לוג';
+        runUrl.href = run.html_url;
+
+        const status = (run.conclusion || run.status || '').toLowerCase();
+        statusPill.textContent = status || '—';
+        statusPill.className = 'pill ' + (status==='success' ? 'ok' : (status==='failure' || status==='cancelled' ? 'err' : 'muted'));
+
+        errBox.style.display = 'none';
+      }catch(e){
+        errBox.style.display = 'flex';
+        errMsg.textContent = e.message || String(e);
+      }
     }
-  }
-  loadLastRun();
+
+    loadLastRun();
+    // ריענון כל 5 דקות
+    setInterval(loadLastRun, 5*60*1000);
   </script>
 </body>
 </html>
