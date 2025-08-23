@@ -109,6 +109,55 @@
 <!doctype html>
 <html lang="he" dir="rtl">
 <head>
+
+
+
+  <!-- == Supabase bootstrap: טוען ספרייה ויוצר לקוח גלובלי == -->
+<script>
+  (function(){
+    // === ערכי הפרויקט שלך (כמו אתמול) ===
+    const SB_URL  = 'https://ylqpxwgchwalcblfipsu.supabase.co';
+    const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM';
+    const UMD_SRC = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
+
+    function loadUmd(){
+      return new Promise((resolve, reject)=>{
+        if (window.supabase && typeof window.supabase.createClient === 'function') return resolve();
+        const s = document.createElement('script');
+        s.src = UMD_SRC;
+        s.async = true;
+        s.onload  = () => (window.supabase && window.supabase.createClient) ? resolve() : reject(new Error('UMD loaded but createClient missing'));
+        s.onerror = () => reject(new Error('Failed to load supabase-js UMD'));
+        document.head.appendChild(s);
+      });
+    }
+
+    async function boot(){
+      try{
+        await loadUmd();
+        // אם כבר יש לקוח – אל תיצור שוב
+        if (!window.supabase || typeof window.supabase.from !== 'function') {
+          const client = window.supabase.createClient(SB_URL, SB_ANON, {
+            auth: { persistSession: true },
+            global: { headers: { 'x-client-info': 'goodi-restore/1' } },
+          });
+          // תאימות מלאה לקוד הישן שציפה ל-supabase.from(...)
+          window.supabase = client;
+          window.supabaseClient = client;
+          window.SB = { client, SB_URL, SB_ANON };
+        }
+        console.log('[goodi] supabase client ready');
+        document.dispatchEvent(new CustomEvent('supa-ready', { detail:{ ok:true } }));
+      }catch(e){
+        console.error('[goodi] supabase bootstrap error', e);
+        document.dispatchEvent(new CustomEvent('supa-ready', { detail:{ ok:false, error:e } }));
+      }
+    }
+    boot();
+  })();
+</script>
+
+  
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>גודי שוברים - מערכת ניהול</title>
