@@ -1,22 +1,35 @@
-<!doctype html>
-<html lang="he" dir="rtl">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Supabase CDN Test</title>
+<script type="module">
+  import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
-  <!-- חייב להיות בלי type="module" -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  const url = "https://YOUR-PROJECT-ref.supabase.co";     // ודא שזה ה-URL הנכון
+  const key = "YOUR_ANON_KEY";                             // ודא שזה ה-anon key
+  const supabase = createClient(url, key);
 
-  <script>
-    window.addEventListener('DOMContentLoaded', () => {
-      const hasSupabase = !!window.supabase;
-      document.body.innerHTML = `
-        <pre>window.supabase: ${hasSupabase ? 'OK' : 'MISSING'}</pre>
-      `;
-      console.log('window.supabase =', window.supabase);
-    });
-  </script>
-</head>
-<body></body>
-</html>
+  const out = (msg) => {
+    const pre = document.querySelector("#out");
+    pre.textContent += msg + "\n";
+  };
+
+  out("CDN: " + (typeof createClient === "function"));
+  out("client: " + (!!supabase));
+
+  try {
+    const { data, error } = await supabase
+      .from("customers")
+      .select("id", { count: "exact", head: false })  // שאילתא מינימלית
+      .limit(1);
+
+    if (error) {
+      out("query: ERROR");
+      out("code: " + (error.code ?? ""));
+      out("message: " + (error.message ?? ""));
+      out("details: " + (error.details ?? ""));
+      out("hint: " + (error.hint ?? ""));
+    } else {
+      out("query: OK, rows=" + data.length);
+    }
+  } catch (e) {
+    out("exception: " + (e?.message ?? e));
+  }
+</script>
+<pre id="out" style="background:#0b1320;color:#b2f5ea;padding:16px;border-radius:12px;"></pre>
