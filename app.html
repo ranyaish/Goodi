@@ -111,6 +111,17 @@
 <head>
 
 
+  <!-- Supabase bootstrap (חובה לפני קוד האפליקציה) -->
+<script src="./supabaseClient.js?v=14.2"></script>
+<script>
+  // מבטיחים שנחכה ל-bootstrap
+  window.supabaseReadyPromise = (async () => {
+    const res = await window.supabaseReady;
+    return res;
+  })();
+</script>
+
+  
 
   <!-- == Supabase bootstrap: טוען ספרייה ויוצר לקוח גלובלי == -->
 <script>
@@ -185,6 +196,48 @@
   <script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 </head>
 <body>
+
+
+
+
+  <!-- ===== Debug: Supabase connection ===== -->
+<div id="dbg" style="max-width:680px;margin:10px auto;border:1px solid #E5E7EB;border-radius:12px;padding:10px;font-family:system-ui;direction:rtl;background:#0B1220;color:#D1D5DB">
+  <div style="font-weight:600;color:#fff;margin-bottom:6px">בדיקת חיבור ל-Supabase</div>
+  <pre id="dbgpre" style="white-space:pre-wrap;margin:0;font-family:ui-monospace,Menlo,Consolas,monospace"></pre>
+</div>
+<script>
+(async () => {
+  const out = document.getElementById('dbgpre');
+  function log(o){ out.textContent = (typeof o==='string'?o:JSON.stringify(o,null,2)); }
+
+  try {
+    const ready = await window.supabaseReadyPromise;
+    if (!ready || !ready.ok) {
+      log({ stage:'bootstrap', ok:false, error: ready && ready.error ? (ready.error.message||String(ready.error)) : 'unknown' });
+      return;
+    }
+
+    const sb = window.supabase && window.supabase.client;
+    if (!sb) {
+      log({ stage:'client', ok:false, error:'window.supabase.client לא קיים' });
+      return;
+    }
+
+    // בדיקה קלה: כמה רשומות ב-customers? (לא מחזיר נתונים, רק count)
+    const { count, error } = await sb.from('customers').select('*', { count:'exact', head:true });
+    if (error) {
+      log({ stage:'query', ok:false, error: error.message || error.code || String(error) });
+    } else {
+      log({ stage:'query', ok:true, count });
+    }
+  } catch (e) {
+    log({ stage:'catch', ok:false, error: e && e.message ? e.message : String(e) });
+  }
+})();
+</script>
+<!-- ===== /Debug ===== -->
+
+  
   <header>
     <div class="brand">
       <img src="logo.png" alt="לוגו" />
