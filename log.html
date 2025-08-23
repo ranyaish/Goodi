@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+  <meta charset="UTF-8">
+  <title>בדיקת ריצה אחרונה</title>
+</head>
+<body>
+  <h2>ריצה אחרונה - GitHub Actions</h2>
+  <div id="wf-last">טוען...</div>
+
+  <script>
+  (async function(){
+    const repo = 'ranyaish/Goodi';
+    const url  = `https://api.github.com/repos/${repo}/actions/runs?per_page=1`;
+
+    const box = document.getElementById('wf-last');
+    try {
+      const r = await fetch(url, { headers: { 'Accept':'application/vnd.github+json' } });
+      const data = await r.json();
+
+      const run = data.workflow_runs && data.workflow_runs[0];
+      if(!run) { box.textContent = "לא נמצאו ריצות"; return; }
+
+      box.innerHTML = `
+        <b>ריצה #${run.run_number}</b><br>
+        סטטוס: ${run.conclusion || run.status}<br>
+        תאריך: ${new Date(run.created_at).toLocaleString('he-IL')}<br>
+        <a href="${run.html_url}" target="_blank">פתח לוג מלא</a>
+      `;
+    } catch(e) {
+      box.textContent = "שגיאה: " + e.message;
+    }
+  })();
+  </script>
+</body>
+</html>
