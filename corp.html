@@ -1,0 +1,33 @@
+// 1) יצירת/איתור לקוח תאגידי לפי שם
+const { data: corpCustomerId, error: e1 } = await supabase.rpc('corp_get_or_create_customer', { p_name: 'דן אלמוני' });
+
+// 2) פתיחת שובר תאגידי
+const { error: e2 } = await supabase.from('corp_vouchers').insert({
+  corp_customer_id: corpCustomerId,
+  opened_at: '2025-08-23',      // או new Date().toISOString().slice(0,10)
+  initial_amount: 350.00,
+  note: 'הטענת תן-ביס'
+});
+
+// 3) הוספת מימוש חלקי לשובר מסוים
+const { error: e3 } = await supabase.from('corp_redemptions').insert({
+  voucher_id: 123,               // ה-ID של השובר מ-corp_vouchers
+  redeemed_at: new Date().toISOString(),
+  amount: 45.00,
+  by_user: 'רן',
+  note: 'חשבון צהריים'
+});
+
+// 4) קריאת יתרות ללקוח (תאגידי בלבד)
+const { data: balances, error: e4 } = await supabase
+  .from('corp_balances_view')
+  .select('*')
+  .eq('corp_customer_id', corpCustomerId)
+  .order('opened_at', { ascending: false });
+
+// 5) סיכום יתרה כולל ללקוח (תאגידי)
+const { data: totals, error: e5 } = await supabase
+  .from('corp_customer_balances_view')
+  .select('*')
+  .eq('corp_customer_id', corpCustomerId)
+  .single();
