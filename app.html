@@ -5,28 +5,43 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>גודי שוברים — מערכת ניהול</title>
 
-  <!-- טעינת Supabase פעם אחת בלבד -->
+  <!-- Supabase bootstrap -->
   <script src="./supabaseClient.js"></script>
 
   <style>
+    :root { --muted:#6b7280; --border:#e5e7eb; --bg:#fff; --pill:#f1f5f9; }
     body{font-family:system-ui,Arial,Heebo,sans-serif;background:#fff;color:#111;margin:0}
-    header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #eee}
+    header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
     .brand{display:flex;gap:12px;align-items:center}
     .brand img{width:44px;height:44px;border-radius:6px;object-fit:cover}
     h1{font-size:22px;margin:0}
     .wrap{max-width:920px;margin:20px auto;padding:0 14px}
-    .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px;margin:12px 0}
-    button{border:1px solid #e5e7eb;background:#0ea5e9;color:#fff;border-radius:10px;padding:10px 14px;cursor:pointer}
+    .card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;margin:12px 0}
+    button{border:1px solid var(--border);background:#0ea5e9;color:#fff;border-radius:10px;padding:10px 14px;cursor:pointer}
+    button.small{padding:6px 10px;border-radius:8px;font-size:14px}
     button.ghost{background:#fff;color:#111}
-    .muted{color:#6b7280;font-size:14px}
+    .muted{color:var(--muted);font-size:14px}
     .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .spacer{flex:1}
-    .pill{font-size:12px;background:#f1f5f9;border:1px solid #e5e7eb;border-radius:999px;padding:3px 8px}
+    .pill{font-size:12px;background:var(--pill);border:1px solid var(--border);border-radius:999px;padding:3px 8px}
     .list{list-style:none;padding:0;margin:10px 0 0}
-    .list li{padding:6px 0;border-bottom:1px dashed #eee}
+    .list li{padding:6px 0;border-bottom:1px dashed var(--border)}
     table{width:100%;border-collapse:collapse}
-    th,td{padding:8px;border-bottom:1px solid #eee;text-align:right}
+    th,td{padding:10px;border-bottom:1px solid var(--border);text-align:right;font-size:15px}
     thead th{background:#f8fafc}
+    .tbl-note{font-size:13px;color:var(--muted)}
+    .ok{color:#065f46}
+    .bad{color:#991b1b}
+
+    /* modal */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:50}
+    .modal{width:min(720px,92vw);background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.25);padding:14px}
+    .modal .hdr{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .modal input[type="text"]{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px}
+    .cust-list{max-height:50vh;overflow:auto;margin-top:10px;border:1px solid var(--border);border-radius:10px}
+    .cust-item{padding:10px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9}
+    .cust-item:hover{background:#f8fafc}
+    .actions{display:flex;gap:8px;align-items:center}
   </style>
 </head>
 <body>
@@ -82,14 +97,14 @@
         <small class="muted">admin / 1234</small>
       </div>
       <form onsubmit="return false" class="row" style="margin-top:8px">
-        <input id="login-user" placeholder="שם משתמש" style="flex:1 1 180px;padding:10px;border:1px solid #e5e7eb;border-radius:10px">
-        <input id="login-pass" placeholder="סיסמה" type="password" style="flex:1 1 180px;padding:10px;border:1px solid #e5e7eb;border-radius:10px">
+        <input id="login-user" placeholder="שם משתמש" style="flex:1 1 180px;padding:10px;border:1px solid var(--border);border-radius:10px">
+        <input id="login-pass" placeholder="סיסמה" type="password" style="flex:1 1 180px;padding:10px;border:1px solid var(--border);border-radius:10px">
         <button id="login-btn">התחבר</button>
         <div id="login-msg" style="color:#991b1b"></div>
       </form>
     </div>
 
-    <!-- לוג עדכונים אחרונים (מה-DB) -->
+    <!-- לוג עדכונים אחרונים (DB) -->
     <div class="card">
       <div class="row">
         <strong>לוג עדכונים אחרונים</strong>
@@ -109,7 +124,7 @@
         <div class="spacer"></div>
         <span class="muted">לקוח נוכחי</span>
       </div>
-      <input id="currentCustomer" class="muted" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px" placeholder="לא נבחר" disabled />
+      <input id="currentCustomer" class="muted" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:10px" placeholder="לא נבחר" disabled />
       <div id="customerSummary" class="muted" style="margin-top:8px">—</div>
     </div>
 
@@ -121,6 +136,18 @@
         <span id="couponMeta" class="pill">—</span>
       </div>
       <div id="couponTable" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <!-- Modal בחירת לקוח -->
+  <div id="custModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="hdr">
+        <strong>בחר לקוח</strong>
+        <button type="button" class="ghost small" id="custClose">סגור</button>
+      </div>
+      <input type="text" id="custSearch" placeholder="חפש לפי שם לקוח…" autocomplete="off" />
+      <div class="cust-list" id="custList"></div>
     </div>
   </div>
 
@@ -147,14 +174,14 @@
     // מחכים לקליינט
     const ready = await window.supabaseReady;
     if(!ready || !ready.ok){ console.error('Supabase not ready'); return; }
-    const supabase = ready.client;
+    const sb = ready.client;
 
-    // לוג 5 אחרונים
+    // === לוג ריצות ===
     async function loadImportLogs(){
       const $list=document.getElementById('logList');
       const $meta=document.getElementById('logMeta');
       $list.innerHTML='<li class="muted">טוען…</li>';
-      const { data, error } = await supabase.from('import_logs').select('*').order('run_time',{ascending:false}).limit(5);
+      const { data, error } = await sb.from('import_logs').select('*').order('run_time',{ascending:false}).limit(5);
       if(error){ $list.innerHTML='<li class="muted">שגיאה בטעינת לוגים</li>'; $meta.textContent='שגיאה'; return; }
       if(!data?.length){ $list.innerHTML='<li class="muted">אין ריצות קודמות</li>'; $meta.textContent='0'; return; }
       $list.innerHTML=''; data.forEach(r=>{ const li=document.createElement('li'); const dt=new Date(r.run_time).toLocaleString('he-IL'); li.textContent=`${dt} — ${r.records_imported} רשומות (${r.status})`; $list.appendChild(li); });
@@ -163,47 +190,122 @@
     document.getElementById('refreshLog').onclick=loadImportLogs;
     loadImportLogs();
 
-    // בחירת לקוח + טעינת שוברים
-    async function pickCustomer(){
+    // === בחירת לקוח – מודל עם חיפוש/אוטוקומפליט ===
+    const modal = document.getElementById('custModal');
+    const search = document.getElementById('custSearch');
+    const list   = document.getElementById('custList');
+    const btnPick= document.getElementById('pickCustomer');
+    const btnClose= document.getElementById('custClose');
+
+    let customersCache = [];
+
+    function openModal(){ modal.style.display='flex'; search.value=''; renderCustomers(customersCache); setTimeout(()=>search.focus(),10); }
+    function closeModal(){ modal.style.display='none'; }
+
+    btnClose.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e)=>{ if(e.target===modal) closeModal(); });
+
+    btnPick.addEventListener('click', async ()=>{
       if(document.documentElement.dataset.goodiAuthed!=='1'){ alert('יש להתחבר'); return; }
-      const { data, error } = await supabase.from('customers').select('customer_id,name').order('name',{ascending:true}).limit(200);
-      if(error || !data?.length){ alert('לא נמצאו לקוחות'); return; }
-      const picked = prompt('בחר לקוח (הקלד בדיוק אחד מהשמות):\n\n'+data.map(c=>c.name).join('\n'));
+      if(customersCache.length===0){
+        const { data, error } = await sb.from('customers').select('customer_id,name').order('name',{ascending:true}).limit(500);
+        if(error){ alert('שגיאה בטעינת לקוחות'); return; }
+        customersCache = data || [];
+      }
+      openModal();
+    });
+
+    function renderCustomers(items){
+      const needle = (search.value||'').trim().toLowerCase();
+      const filtered = !needle ? items : items.filter(c => (c.name||'').toLowerCase().includes(needle));
+      list.innerHTML = filtered.map(c=>`<div class="cust-item" data-id="${c.customer_id}">${c.name}</div>`).join('') || `<div class="cust-item tbl-note">אין תוצאות</div>`;
+    }
+    search.addEventListener('input', ()=>renderCustomers(customersCache));
+    list.addEventListener('click', (e)=>{
+      const el = e.target.closest('.cust-item'); if(!el || !el.dataset.id) return;
+      const picked = customersCache.find(x=> String(x.customer_id) === el.dataset.id);
       if(!picked) return;
-      const row = data.find(c=>c.name===picked);
-      if(!row){ alert('לא נמצא'); return; }
+      closeModal();
+      loadCustomer(picked);
+    });
 
-      document.getElementById('currentCustomer').value = row.name || '(ללא שם)';
-      document.getElementById('customerSummary').textContent = `מזהה: ${row.customer_id ?? '-'}`;
-
-      const { data: coupons, error: cErr } = await supabase
-        .from('coupons')
-        .select('id,date,amount,redeemed,redeemed_at')
-        .eq('customer_id', row.customer_id)
-        .order('date',{ascending:false});
+    // === טעינת לקוח ושוברים + כפתורי פעולה ===
+    async function loadCustomer(cust){
+      document.getElementById('currentCustomer').value = cust.name || '(ללא שם)';
+      document.getElementById('customerSummary').textContent = `מזהה: ${cust.customer_id ?? '-'}`;
 
       const $wrap=document.getElementById('customerCoupons');
       const $tbl =document.getElementById('couponTable');
       const $meta=document.getElementById('couponMeta');
 
-      if(cErr){ $wrap.style.display='block'; $tbl.innerHTML='<div class="muted">שגיאה בטעינת שוברים</div>'; $meta.textContent='שגיאה'; return; }
-      if(!coupons?.length){ $wrap.style.display='block'; $tbl.innerHTML='<div class="muted">אין שוברים ללקוח</div>'; $meta.textContent='0'; return; }
-
-      const rows=coupons.map(c=>`
-        <tr>
-          <td>${new Date(c.date).toLocaleDateString('he-IL')}</td>
-          <td>₪ ${Number(c.amount||0).toFixed(2)}</td>
-          <td>${c.redeemed?'✔︎':'—'}</td>
-        </tr>`).join('');
-
+      $tbl.innerHTML = '<div class="muted">טוען…</div>';
       $wrap.style.display='block';
+
+      const { data: coupons, error } = await sb
+        .from('coupons')
+        .select('id,date,amount,redeemed,redeemed_at')
+        .eq('customer_id', cust.customer_id)
+        .order('date',{ascending:false});
+
+      if(error){ $tbl.innerHTML='<div class="muted">שגיאה בטעינת שוברים</div>'; $meta.textContent='שגיאה'; return; }
+      if(!coupons?.length){ $tbl.innerHTML='<div class="muted">אין שוברים ללקוח</div>'; $meta.textContent='0'; return; }
+
       $meta.textContent=String(coupons.length);
-      $tbl.innerHTML=`
+      const rows = coupons.map(c=>{
+        const d = c.date ? new Date(c.date).toLocaleDateString('he-IL') : '—';
+        const amt = `₪ ${Number(c.amount||0).toFixed(2)}`;
+        const redeemed = !!c.redeemed;
+        const redeemedMark = redeemed ? '✔︎' : '—';
+        const actions = redeemed
+          ? `<button class="small ghost" data-action="unredeem" data-id="${c.id}">בטל מימוש</button>`
+          : `<button class="small" data-action="redeem" data-id="${c.id}">מימוש</button>`;
+        const sub = c.redeemed_at ? `<div class="tbl-note">מומש: ${new Date(c.redeemed_at).toLocaleString('he-IL')}</div>` : '';
+        return `<tr>
+          <td>${d}${sub}</td>
+          <td>${amt}</td>
+          <td>${redeemedMark}</td>
+          <td class="actions">${actions}</td>
+        </tr>`;
+      }).join('');
+
+      $tbl.innerHTML = `
         <table>
-          <thead><tr><th>תאריך</th><th>סכום</th><th>מומש</th></tr></thead>
-        <tbody>${rows}</tbody></table>`;
+          <thead><tr><th>תאריך</th><th>סכום</th><th>מומש</th><th>פעולות</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>`;
+
+      // מאזינים לכפתורי פעולה
+      $tbl.querySelectorAll('[data-action="redeem"]').forEach(btn=>{
+        btn.addEventListener('click', ()=>handleRedeem(Number(btn.dataset.id), cust));
+      });
+      $tbl.querySelectorAll('[data-action="unredeem"]').forEach(btn=>{
+        btn.addEventListener('click', ()=>handleUnredeem(Number(btn.dataset.id), cust));
+      });
     }
-    document.getElementById('pickCustomer').onclick=pickCustomer;
+
+    async function handleRedeem(couponId, cust){
+      if(!confirm('לסמן את השובר כמומש?')) return;
+      const { error } = await sb.from('coupons').update({
+        redeemed: true,
+        redeemed_at: new Date().toISOString()
+      }).eq('id', couponId).limit(1);
+      if(error){ alert('שגיאה במימוש'); return; }
+      // רענון רשימת השוברים ללקוח
+      loadCustomer(cust);
+    }
+
+    async function handleUnredeem(couponId, cust){
+      const approver = prompt('שם המאשר ביטול מימוש (חובה):');
+      if(!approver || !approver.trim()){ alert('נדרש שם מאשר'); return; }
+      // הערה: כרגע איננו שומרים את שם המאשר בבסיס. אם תרצה לשמר אותו — תגיד לי ונוסיף עמודת audit.
+      const { error } = await sb.from('coupons').update({
+        redeemed: false,
+        redeemed_at: null
+      }).eq('id', couponId).limit(1);
+      if(error){ alert('שגיאה בביטול מימוש'); return; }
+      loadCustomer(cust);
+    }
+
   })();
   </script>
 </body>
