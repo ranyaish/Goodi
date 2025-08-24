@@ -1,124 +1,13 @@
-<!-- ========== GitHub Actions: ריצה אחרונה (קומפקטי) ========== -->
-<div id="wf-mini" style="direction:rtl;max-width:760px;margin:24px auto 0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
-  <div style="font-size:13px;color:#6b7280;margin-bottom:6px">עדכון אחרון</div>
-  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid #e5e7eb;border-radius:10px;padding:8px 10px">
-    <span id="wf-mini-run" style="font-family:ui-monospace,Menlo,Consolas,monospace">—</span>
-    <span id="wf-mini-status" style="border:1px solid #e5e7eb;border-radius:999px;padding:2px 8px;font-size:12px;color:#6b7280">—</span>
-    <span id="wf-mini-time" style="color:#6b7280">—</span>
-    <a id="wf-mini-url" target="_blank" rel="noopener" style="margin-inline-start:auto;color:#2563eb;text-decoration:none">פתח לוג</a>
-  </div>
-</div>
-<script>
-(async () => {
-  const repo = 'ranyaish/Goodi';
-  const url  = `https://api.github.com/repos/${repo}/actions/runs?per_page=1`;
-
-  const el = id => document.getElementById(id);
-  const runEl = el('wf-mini-run'), stEl = el('wf-mini-status'),
-        tEl = el('wf-mini-time'), aEl = el('wf-mini-url');
-
-  async function loadOne() {
-    try{
-      const r = await fetch(url, { headers:{'Accept':'application/vnd.github+json'}, cache:'no-store' });
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      const js = await r.json();
-      const x = js.workflow_runs?.[0];
-      if(!x) throw new Error('אין ריצות');
-
-      runEl.textContent = `run #${x.run_number}`;
-      aEl.href = x.html_url;
-
-      const when = new Date(x.created_at);
-      tEl.textContent = when.toLocaleString('he-IL',{hour12:false});
-
-      const s = (x.conclusion || x.status || '').toLowerCase();
-      stEl.textContent = s || '—';
-      stEl.style.background = s==='success' ? '#ecfdf5' : (s==='failure'||s==='cancelled' ? '#fef2f2' : '#f3f4f6');
-      stEl.style.color      = s==='success' ? '#065f46' : (s==='failure'||s==='cancelled' ? '#991b1b' : '#374151');
-      stEl.style.borderColor= s==='success' ? '#a7f3d0' : (s==='failure'||s==='cancelled' ? '#fecaca' : '#e5e7eb');
-    }catch(e){
-      runEl.textContent = '—';
-      stEl.textContent  = 'שגיאה';
-      tEl.textContent   = '';
-      aEl.removeAttribute('href');
-    }
-  }
-  loadOne();
-  setInterval(loadOne, 5*60*1000);
-})();
-</script>
-<!-- ========== /GitHub Actions: ריצה אחרונה ========== -->
-
-
-
-
 <!doctype html>
 <html lang="he" dir="rtl">
 <head>
-
-
-
-  <!-- Supabase bootstrap (חובה לפני קוד האפליקציה) -->
-<script src="./supabaseClient.js"></script>
-<script>
-  // מבטיחים שנחכה ל-bootstrap
-  window.supabaseReadyPromise = (async () => {
-    const res = await window.supabaseReady;
-    return res;
-  })();
-</script>
-
-  
-
-  <!-- == Supabase bootstrap: טוען ספרייה ויוצר לקוח גלובלי == -->
-<script>
-  (function(){
-    // === ערכי הפרויקט שלך (כמו אתמול) ===
-    const SB_URL  = 'https://ylqpxwgchwalcblfipsu.supabase.co';
-    const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM';
-    const UMD_SRC = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js';
-
-    function loadUmd(){
-      return new Promise((resolve, reject)=>{
-        if (window.supabase && typeof window.supabase.createClient === 'function') return resolve();
-        const s = document.createElement('script');
-        s.src = UMD_SRC;
-        s.async = true;
-        s.onload  = () => (window.supabase && window.supabase.createClient) ? resolve() : reject(new Error('UMD loaded but createClient missing'));
-        s.onerror = () => reject(new Error('Failed to load supabase-js UMD'));
-        document.head.appendChild(s);
-      });
-    }
-
-    async function boot(){
-      try{
-        await loadUmd();
-        // אם כבר יש לקוח – אל תיצור שוב
-        if (!window.supabase || typeof window.supabase.from !== 'function') {
-          const client = window.supabase.createClient(SB_URL, SB_ANON, {
-            auth: { persistSession: true },
-            global: { headers: { 'x-client-info': 'goodi-restore/1' } },
-          });
-          // תאימות מלאה לקוד הישן שציפה ל-supabase.from(...)
-          window.supabase = client;
-          window.supabaseClient = client;
-          window.SB = { client, SB_URL, SB_ANON };
-        }
-        console.log('[goodi] supabase client ready');
-        document.dispatchEvent(new CustomEvent('supa-ready', { detail:{ ok:true } }));
-      }catch(e){
-        console.error('[goodi] supabase bootstrap error', e);
-        document.dispatchEvent(new CustomEvent('supa-ready', { detail:{ ok:false, error:e } }));
-      }
-    }
-    boot();
-  })();
-</script>
-
-  
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>גודי שוברים - מערכת ניהול</title>
+
+  <!-- ✅ טוען את הבוטסטרפ היחיד של Supabase (יוצר window.supabase.client + window.supabaseReady) -->
+  <script src="./supabaseClient.js"></script>
+
   <style>
     body{font-family:system-ui,Arial,Heebo,sans-serif;background:#fff;color:#111;margin:0}
     header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #eee}
@@ -139,144 +28,44 @@
     th,td{padding:8px;border-bottom:1px solid #eee;text-align:right}
     thead th{background:#f8fafc}
   </style>
-  <!-- Supabase JS (UMD) -->
-  <script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 </head>
 <body>
 
-  <script src="./supabaseClient.js"></script>
-
-  <script>
-/* ממתינים ל-supabaseReady וגם ל-login */
-(async function(){
-  async function initCustomers(){
-    try{
-      const ready = await window.supabaseReady;
-      if(!ready || !ready.ok) return;
-      const sb = ready.client;
-
-      // דוגמה: טוען לקוחות ומחבר את הכפתור
-      const btn = document.querySelector('[data-action="pick-customer"]') || document.querySelector('button:contains("בחר לקוח")');
-      // אם אין dataset בכפתור, תן לו:
-      if(!btn) return;
-
-      btn.addEventListener('click', async ()=>{
-        if (document.documentElement.dataset.goodiAuthed!=='1') { alert('יש להתחבר'); return; }
-
-        btn.disabled = true;
-        try{
-          const { data, error } = await sb
-            .from('customers')            // שם הטבלה אצלך
-            .select('id,name')
-            .order('name',{ascending:true})
-            .limit(200);
-
-          if(error) throw error;
-          if(!data || !data.length){ alert('אין לקוחות'); return; }
-
-          // דיאלוג בחירה בסיסי
-          const names = data.map(c=>c.name).join('\n');
-          const picked = prompt('בחר לקוח (הקלד בדיוק):\n\n'+names);
-          if(!picked) return;
-
-          const row = data.find(c=>c.name===picked);
-          if(!row){ alert('לא נמצא'); return; }
-
-          // כאן המשך הלוגיקה שלך לטעינה/תצוגה לפי לקוח:
-          console.log('נבחר לקוח', row);
-          alert('נבחר: '+row.name);
-        }finally{
-          btn.disabled = false;
-        }
-      });
-    }catch(_){}
-  }
-
-  // אם כבר מחובר – מפעילים, ואם לא – נחכה לאירוע
-  if (document.documentElement.dataset.goodiAuthed==='1') initCustomers();
-  document.addEventListener('goodi:authed', initCustomers);
-})();
-</script>
-
-  <!-- ========== Login Gate (פשוט) ========== -->
-<div id="login-box" style="direction:rtl;max-width:760px;margin:16px auto;border:1px solid #e5e7eb;border-radius:12px;padding:14px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
-  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-    <strong>כניסה</strong>
-    <small style="color:#6b7280">admin / 1234 (אפשר לשנות בקוד)</small>
+  <!-- ====== פס עליון קטן: ריצה אחרונה מגיטהאב (קומפקטי) ====== -->
+  <div id="wf-mini" style="direction:rtl;max-width:760px;margin:16px auto 0;font-family:system-ui">
+    <div style="font-size:13px;color:#6b7280;margin-bottom:6px">עדכון אחרון</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid #e5e7eb;border-radius:10px;padding:8px 10px">
+      <span id="wf-mini-run" style="font-family:ui-monospace,Menlo,Consolas,monospace">—</span>
+      <span id="wf-mini-status" style="border:1px solid #e5e7eb;border-radius:999px;padding:2px 8px;font-size:12px;color:#6b7280">—</span>
+      <span id="wf-mini-time" style="color:#6b7280">—</span>
+      <a id="wf-mini-url" target="_blank" rel="noopener" style="margin-inline-start:auto;color:#2563eb;text-decoration:none">פתח לוג</a>
+    </div>
   </div>
-  <form id="login-form" onsubmit="return false" style="display:flex;gap:8px;flex-wrap:wrap">
-    <input id="login-user" placeholder="שם משתמש" style="flex:1 1 180px;padding:10px;border:1px solid #e5e7eb;border-radius:10px">
-    <input id="login-pass" placeholder="סיסמה" type="password" style="flex:1 1 180px;padding:10px;border:1px solid #e5e7eb;border-radius:10px">
-    <button id="login-btn" style="padding:10px 16px;border:1px solid #e5e7eb;border-radius:10px;background:#2563eb;color:#fff">התחבר</button>
-    <div id="login-msg" style="color:#991b1b"></div>
-  </form>
-</div>
-<script>
-(function(){
-  const LS_KEY = 'goodi_is_logged_in';
-  const LOGGED = localStorage.getItem(LS_KEY)==='1';
-
-  const box = document.getElementById('login-box');
-  if (LOGGED) { box.style.display='none'; document.documentElement.dataset.goodiAuthed='1'; }
-
-  document.getElementById('login-btn').addEventListener('click', ()=>{
-    const u = document.getElementById('login-user').value.trim();
-    const p = document.getElementById('login-pass').value.trim();
-    if (u==='admin' && p==='1234') {
-      localStorage.setItem(LS_KEY,'1');
-      box.style.display='none';
-      document.documentElement.dataset.goodiAuthed='1';
-      document.dispatchEvent(new CustomEvent('goodi:authed'));
-    } else {
-      document.getElementById('login-msg').textContent = 'שגיאת התחברות';
-      setTimeout(()=>document.getElementById('login-msg').textContent='', 2000);
+  <script>
+  (async () => {
+    const repo = 'ranyaish/Goodi';
+    const url  = `https://api.github.com/repos/${repo}/actions/runs?per_page=1`;
+    const $ = id => document.getElementById(id);
+    const runEl=$('wf-mini-run'), stEl=$('wf-mini-status'), tEl=$('wf-mini-time'), aEl=$('wf-mini-url');
+    async function loadOne(){
+      try{
+        const r=await fetch(url,{headers:{'Accept':'application/vnd.github+json'},cache:'no-store'});
+        if(!r.ok) throw new Error();
+        const js=await r.json(); const x=js.workflow_runs?.[0]; if(!x) throw new Error();
+        runEl.textContent=`run #${x.run_number}`; aEl.href=x.html_url;
+        tEl.textContent=new Date(x.created_at).toLocaleString('he-IL',{hour12:false});
+        const s=(x.conclusion||x.status||'').toLowerCase();
+        stEl.textContent=s||'—';
+        stEl.style.background=s==='success'?'#ecfdf5':(s==='failure'||s==='cancelled'?'#fef2f2':'#f3f4f6');
+        stEl.style.color     =s==='success'?'#065f46':(s==='failure'||s==='cancelled'?'#991b1b':'#374151');
+        stEl.style.borderColor=s==='success'?'#a7f3d0':(s==='failure'||s==='cancelled'?'#fecaca':'#e5e7eb');
+      }catch(_){ /* שקט */ }
     }
-  });
-})();
-</script>
-<!-- ========== /Login Gate ========== -->
+    loadOne(); setInterval(loadOne,5*60*1000);
+  })();
+  </script>
+  <!-- ====== /פס ריצה אחרונה ====== -->
 
-  
-
-
-  <!-- ===== Debug: Supabase connection ===== -->
-<div id="dbg" style="max-width:680px;margin:10px auto;border:1px solid #E5E7EB;border-radius:12px;padding:10px;font-family:system-ui;direction:rtl;background:#0B1220;color:#D1D5DB">
-  <div style="font-weight:600;color:#fff;margin-bottom:6px">בדיקת חיבור ל-Supabase</div>
-  <pre id="dbgpre" style="white-space:pre-wrap;margin:0;font-family:ui-monospace,Menlo,Consolas,monospace"></pre>
-</div>
-<script>
-(async () => {
-  const out = document.getElementById('dbgpre');
-  function log(o){ out.textContent = (typeof o==='string'?o:JSON.stringify(o,null,2)); }
-
-  try {
-    const ready = await window.supabaseReadyPromise;
-    if (!ready || !ready.ok) {
-      log({ stage:'bootstrap', ok:false, error: ready && ready.error ? (ready.error.message||String(ready.error)) : 'unknown' });
-      return;
-    }
-
-    const sb = window.supabase && window.supabase.client;
-    if (!sb) {
-      log({ stage:'client', ok:false, error:'window.supabase.client לא קיים' });
-      return;
-    }
-
-    // בדיקה קלה: כמה רשומות ב-customers? (לא מחזיר נתונים, רק count)
-    const { count, error } = await sb.from('customers').select('*', { count:'exact', head:true });
-    if (error) {
-      log({ stage:'query', ok:false, error: error.message || error.code || String(error) });
-    } else {
-      log({ stage:'query', ok:true, count });
-    }
-  } catch (e) {
-    log({ stage:'catch', ok:false, error: e && e.message ? e.message : String(e) });
-  }
-})();
-</script>
-<!-- ===== /Debug ===== -->
-
-  
   <header>
     <div class="brand">
       <img src="logo.png" alt="לוגו" />
@@ -288,7 +77,22 @@
   </header>
 
   <div class="wrap">
-    <!-- לוג עדכונים אחרונים -->
+
+    <!-- כניסה בסיסית -->
+    <div id="login-box" class="card">
+      <div class="row" style="justify-content:space-between">
+        <strong>כניסה</strong>
+        <small class="muted">admin / 1234</small>
+      </div>
+      <form onsubmit="return false" class="row" style="margin-top:8px">
+        <input id="login-user" placeholder="שם משתמש" style="flex:1 1 180px;padding:10px;border:1px solid #e5e7eb;border-radius:10px">
+        <input id="login-pass" placeholder="סיסמה" type="password" style="flex:1 1 180px;padding:10px;border:1px solid #e5e7eb;border-radius:10px">
+        <button id="login-btn">התחבר</button>
+        <div id="login-msg" style="color:#991b1b"></div>
+      </form>
+    </div>
+
+    <!-- לוג עדכונים אחרונים (מה-DB) -->
     <div class="card">
       <div class="row">
         <strong>לוג עדכונים אחרונים</strong>
@@ -324,119 +128,94 @@
   </div>
 
   <script>
-    // ===== חיבור ל-Supabase לקריאה (anon) =====
-    const SUPABASE_URL  = "https://ylqpxwgchwalcblfipsu.supabase.co";
-const SB_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM";
-    const supabase = window.Supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-
-    // יציאה — ניקוי סטורג'
-    document.getElementById("logoutBtn").onclick = () => {
-      try { localStorage.clear(); sessionStorage.clear(); } catch(_) {}
-      location.reload();
-    };
-
-    // ===== לוג 5 ריצות אחרונות =====
-    async function loadImportLogs() {
-      const $list = document.getElementById("logList");
-      const $meta = document.getElementById("logMeta");
-      $list.innerHTML = '<li class="muted">טוען…</li>';
-
-      const { data, error } = await supabase
-        .from("import_logs")
-        .select("*")
-        .order("run_time", { ascending: false })
-        .limit(5);
-
-      if (error) {
-        $list.innerHTML = `<li class="muted">שגיאה בטעינת לוגים</li>`;
-        $meta.textContent = "שגיאה";
-        return;
+  // ===== כניסה מקומית (ללא שרת) =====
+  (function(){
+    const LS_KEY='goodi_is_logged_in';
+    const box=document.getElementById('login-box');
+    if(localStorage.getItem(LS_KEY)==='1'){ box.style.display='none'; document.documentElement.dataset.goodiAuthed='1'; }
+    document.getElementById('login-btn').addEventListener('click',()=>{
+      const u=document.getElementById('login-user').value.trim();
+      const p=document.getElementById('login-pass').value.trim();
+      if(u==='admin' && p==='1234'){
+        localStorage.setItem(LS_KEY,'1'); box.style.display='none';
+        document.documentElement.dataset.goodiAuthed='1';
+        document.dispatchEvent(new CustomEvent('goodi:authed'));
+      }else{
+        const m=document.getElementById('login-msg'); m.textContent='שגיאת התחברות';
+        setTimeout(()=>m.textContent='',2000);
       }
+    });
+    document.getElementById('logoutBtn').onclick=()=>{ try{localStorage.clear();sessionStorage.clear();}catch(_){} location.reload(); };
+  })();
 
-      if (!data || !data.length) {
-        $list.innerHTML = `<li class="muted">אין ריצות קודמות</li>`;
-        $meta.textContent = "0";
-        return;
-      }
+  // ===== שימוש ב-Supabase דרך supabaseClient.js =====
+  (async function(){
+    const ready = await window.supabaseReady;      // ← נחכה לבוטסטרפ
+    if(!ready || !ready.ok){ console.warn('supabase bootstrap failed'); return; }
+    const supabase = ready.client;
 
-      $list.innerHTML = "";
-      data.forEach((log) => {
-        const li = document.createElement("li");
-        const dt = new Date(log.run_time).toLocaleString("he-IL");
-        li.textContent = `${dt} — ${log.records_imported} רשומות (${log.status})`;
+    // --- לוג (5 אחרונים) ---
+    async function loadImportLogs(){
+      const $list=document.getElementById('logList');
+      const $meta=document.getElementById('logMeta');
+      $list.innerHTML='<li class="muted">טוען…</li>';
+      const { data, error } = await supabase.from('import_logs').select('*').order('run_time',{ascending:false}).limit(5);
+      if(error){ $list.innerHTML='<li class="muted">שגיאה בטעינת לוגים</li>'; $meta.textContent='שגיאה'; return; }
+      if(!data?.length){ $list.innerHTML='<li class="muted">אין ריצות קודמות</li>'; $meta.textContent='0'; return; }
+      $list.innerHTML=''; data.forEach(row=>{
+        const li=document.createElement('li');
+        const dt=new Date(row.run_time).toLocaleString('he-IL');
+        li.textContent=`${dt} — ${row.records_imported} רשומות (${row.status})`;
         $list.appendChild(li);
       });
-      $meta.textContent = `סה״כ: ${data.length}`;
+      $meta.textContent=`סה״כ: ${data.length}`;
     }
-    document.getElementById("refreshLog").onclick = loadImportLogs;
+    document.getElementById('refreshLog').onclick=loadImportLogs;
+    loadImportLogs();
 
-    // ===== בחירת לקוח לדוגמה + טעינת שוברים =====
-    async function pickCustomer() {
-      const { data, error } = await supabase
-        .from("customers")
-        .select("customer_id,name")
-        .order("name", { ascending: true })
-        .limit(1);
+    // --- בחירת לקוח + טעינת שוברים ---
+    async function pickCustomer(){
+      if(document.documentElement.dataset.goodiAuthed!=='1'){ alert('יש להתחבר'); return; }
+      const { data, error } = await supabase.from('customers').select('customer_id,name').order('name',{ascending:true}).limit(200);
+      if(error || !data?.length){ alert('לא נמצאו לקוחות'); return; }
+      const picked = prompt('בחר לקוח (הקלד בדיוק אחד מהשמות):\n\n'+data.map(c=>c.name).join('\n'));
+      if(!picked) return;
+      const row = data.find(c=>c.name===picked);
+      if(!row){ alert('לא נמצא'); return; }
 
-      if (error || !data || !data.length) {
-        alert("לא נמצאו לקוחות");
-        return;
-      }
-
-      const customer = data[0];
-      document.getElementById("currentCustomer").value = customer.name || "(ללא שם)";
-      document.getElementById("customerSummary").textContent = `מזהה: ${customer.customer_id || "-"}`;
+      document.getElementById('currentCustomer').value = row.name || '(ללא שם)';
+      document.getElementById('customerSummary').textContent = `מזהה: ${row.customer_id ?? '-'}`;
 
       const { data: coupons, error: cErr } = await supabase
-        .from("coupons")
-        .select("id,date,amount,redeemed,redeemed_at")
-        .eq("customer_id", customer.customer_id)
-        .order("date", { ascending: false });
+        .from('coupons')
+        .select('id,date,amount,redeemed,redeemed_at')
+        .eq('customer_id', row.customer_id)
+        .order('date',{ascending:false});
 
-      const $wrap = document.getElementById("customerCoupons");
-      const $tbl  = document.getElementById("couponTable");
-      const $meta = document.getElementById("couponMeta");
+      const $wrap=document.getElementById('customerCoupons');
+      const $tbl =document.getElementById('couponTable');
+      const $meta=document.getElementById('couponMeta');
 
-      if (cErr) {
-        $wrap.style.display = "block";
-        $tbl.innerHTML = `<div class="muted">שגיאה בטעינת שוברים</div>`;
-        $meta.textContent = "שגיאה";
-        return;
-      }
+      if(cErr){ $wrap.style.display='block'; $tbl.innerHTML='<div class="muted">שגיאה בטעינת שוברים</div>'; $meta.textContent='שגיאה'; return; }
+      if(!coupons?.length){ $wrap.style.display='block'; $tbl.innerHTML='<div class="muted">אין שוברים ללקוח</div>'; $meta.textContent='0'; return; }
 
-      if (!coupons || !coupons.length) {
-        $wrap.style.display = "block";
-        $tbl.innerHTML = `<div class="muted">אין שוברים ללקוח</div>`;
-        $meta.textContent = "0";
-        return;
-      }
+      const rows=coupons.map(c=>`
+        <tr>
+          <td>${new Date(c.date).toLocaleDateString('he-IL')}</td>
+          <td>₪ ${Number(c.amount||0).toFixed(2)}</td>
+          <td>${c.redeemed?'✔︎':'—'}</td>
+        </tr>`).join('');
 
-      const rows = coupons.map(c =>
-        `<tr>
-          <td>${new Date(c.date).toLocaleDateString("he-IL")}</td>
-          <td>₪ ${Number(c.amount || 0).toFixed(2)}</td>
-          <td>${c.redeemed ? "✔︎" : "—"}</td>
-        </tr>`
-      ).join("");
-
-      $wrap.style.display = "block";
-      $meta.textContent = `${coupons.length}`;
-      $tbl.innerHTML = `
+      $wrap.style.display='block';
+      $meta.textContent=String(coupons.length);
+      $tbl.innerHTML=`
         <table>
-          <thead>
-            <tr>
-              <th>תאריך</th>
-              <th>סכום</th>
-              <th>מומש</th>
-            </tr>
-          </thead>
+          <thead><tr><th>תאריך</th><th>סכום</th><th>מומש</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>`;
     }
-    document.getElementById("pickCustomer").onclick = pickCustomer;
-
-    // טעינת הלוגים בכניסה
-    loadImportLogs();
+    document.getElementById('pickCustomer').onclick=pickCustomer;
+  })();
   </script>
 </body>
 </html>
