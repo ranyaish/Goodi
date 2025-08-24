@@ -2,314 +2,209 @@
 <html lang="he" dir="rtl">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>גודי שוברים - מערכת ניהול (v12)</title>
-  <link rel="icon" href="logo.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>גודי שוברים — מערכת ניהול</title>
+
+  <!-- טעינת Supabase פעם אחת בלבד -->
+  <script src="./supabaseClient.js"></script>
+
   <style>
-    :root { --brand:#0ea5e9; --bg:#fff; --text:#0f172a; --muted:#64748b; --card:#f8fafc; --border:#e2e8f0; }
-    html,body { background:#fff; color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Heebo,Arial,sans-serif; }
-    .container{max-width:900px;margin:20px auto;padding:0 16px}
-    header{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-    header img{width:54px;height:54px;border-radius:6px;object-fit:cover}
-    h1{font-size:28px;margin:0}
-    .muted{color:var(--muted)}
-    .card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:18px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
-    .btn{background:var(--brand);color:#fff;border:none;border-radius:12px;padding:12px 18px;font-weight:700;cursor:pointer}
-    .btn:disabled{opacity:.6;cursor:not-allowed}
-    .btn-outline{background:#fff;color:var(--text);border:1px solid var(--border)}
-    .row{display:flex;gap:12px;flex-wrap:wrap}
-    .col{flex:1 1 260px}
-    input{width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;background:#fff}
-    .section-title{font-size:18px;margin:0 0 12px}
-    #logout{margin-inline-start:8px}
-    #customerName{min-height:44px;display:flex;align-items:center;padding-inline:12px;background:#fff;border:1px solid var(--border);border-radius:10px}
-    #debug-box, #wf-box{margin-top:18px}
-    details{margin-top:6px}
-    .pill{display:inline-block;background:#eef6ff;border:1px solid #dbeafe;color:#1e293b;border-radius:999px;padding:6px 10px;font-size:12px;margin-inline-end:8px}
-    .empty{color:var(--muted);text-align:center;padding:28px;border:1px dashed var(--border);border-radius:12px;background:#fff}
+    body{font-family:system-ui,Arial,Heebo,sans-serif;background:#fff;color:#111;margin:0}
+    header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #eee}
+    .brand{display:flex;gap:12px;align-items:center}
+    .brand img{width:44px;height:44px;border-radius:6px;object-fit:cover}
+    h1{font-size:22px;margin:0}
+    .wrap{max-width:920px;margin:20px auto;padding:0 14px}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px;margin:12px 0}
+    button{border:1px solid #e5e7eb;background:#0ea5e9;color:#fff;border-radius:10px;padding:10px 14px;cursor:pointer}
+    button.ghost{background:#fff;color:#111}
+    .muted{color:#6b7280;font-size:14px}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .spacer{flex:1}
+    .pill{font-size:12px;background:#f1f5f9;border:1px solid #e5e7eb;border-radius:999px;padding:3px 8px}
+    .list{list-style:none;padding:0;margin:10px 0 0}
+    .list li{padding:6px 0;border-bottom:1px dashed #eee}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px;border-bottom:1px solid #eee;text-align:right}
+    thead th{background:#f8fafc}
   </style>
 </head>
 <body>
-  <div class="container">
-    <header>
+
+  <!-- כותרת -->
+  <header>
+    <div class="brand">
       <img src="logo.png" alt="לוגו" />
-      <div>
-        <h1>גודי שוברים - מערכת ניהול</h1>
-        <div class="muted">בחירת לקוח, סימון/ביטול מימוש</div>
-      </div>
-      <div style="margin-inline-start:auto">
-        <button id="logout" class="btn btn-outline">יציאה</button>
-      </div>
-    </header>
+      <h1>גודי שוברים — מערכת ניהול</h1>
+    </div>
+    <div class="row">
+      <button id="logoutBtn" class="ghost">יציאה</button>
+    </div>
+  </header>
 
-    <!-- כרטיס התחברות מקומית -->
-    <section id="login-card" class="card" style="display:none">
-      <h2 class="section-title">כניסה</h2>
+  <!-- פס קטן: ריצה אחרונה מגיטהאב (קומפקטי) -->
+  <div id="wf-mini" style="direction:rtl;max-width:920px;margin:16px auto 0;font-family:system-ui">
+    <div style="font-size:13px;color:#6b7280;margin-bottom:6px">עדכון אחרון</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid #e5e7eb;border-radius:10px;padding:8px 10px">
+      <span id="wf-mini-run" style="font-family:ui-monospace,Menlo,Consolas,monospace">—</span>
+      <span id="wf-mini-status" style="border:1px solid #e5e7eb;border-radius:999px;padding:2px 8px;font-size:12px;color:#6b7280">—</span>
+      <span id="wf-mini-time" style="color:#6b7280">—</span>
+      <a id="wf-mini-url" target="_blank" rel="noopener" style="margin-inline-start:auto;color:#2563eb;text-decoration:none">פתח לוג</a>
+    </div>
+  </div>
+  <script>
+  (async () => {
+    const repo='ranyaish/Goodi', url=`https://api.github.com/repos/${repo}/actions/runs?per_page=1`;
+    const $=id=>document.getElementById(id);
+    const runEl=$('wf-mini-run'), stEl=$('wf-mini-status'), tEl=$('wf-mini-time'), aEl=$('wf-mini-url');
+    async function loadOne(){
+      try{
+        const r=await fetch(url,{headers:{'Accept':'application/vnd.github+json'},cache:'no-store'});
+        if(!r.ok) throw 0; const js=await r.json(); const x=js.workflow_runs?.[0]; if(!x) throw 0;
+        runEl.textContent=`run #${x.run_number}`; aEl.href=x.html_url;
+        tEl.textContent=new Date(x.created_at).toLocaleString('he-IL',{hour12:false});
+        const s=(x.conclusion||x.status||'').toLowerCase();
+        stEl.textContent=s||'—';
+        stEl.style.background=s==='success'?'#ecfdf5':(s==='failure'||s==='cancelled'?'#fef2f2':'#f3f4f6');
+        stEl.style.color     =s==='success'?'#065f46':(s==='failure'||s==='cancelled'?'#991b1b':'#374151');
+        stEl.style.borderColor=s==='success'?'#a7f3d0':(s==='failure'||s==='cancelled'?'#fecaca':'#e5e7eb');
+      }catch(_){}
+    }
+    loadOne(); setInterval(loadOne,5*60*1000);
+  })();
+  </script>
+
+  <div class="wrap">
+    <!-- כניסה בסיסית -->
+    <div id="login-box" class="card">
+      <div class="row" style="justify-content:space-between">
+        <strong>כניסה</strong>
+        <small class="muted">admin / 1234</small>
+      </div>
+      <form onsubmit="return false" class="row" style="margin-top:8px">
+        <input id="login-user" placeholder="שם משתמש" style="flex:1 1 180px;padding:10px;border:1px solid #e5e7eb;border-radius:10px">
+        <input id="login-pass" placeholder="סיסמה" type="password" style="flex:1 1 180px;padding:10px;border:1px solid #e5e7eb;border-radius:10px">
+        <button id="login-btn">התחבר</button>
+        <div id="login-msg" style="color:#991b1b"></div>
+      </form>
+    </div>
+
+    <!-- לוג עדכונים אחרונים (מה-DB) -->
+    <div class="card">
       <div class="row">
-        <div class="col">
-          <label>שם משתמש</label>
-          <input id="login-user" autocomplete="username" value="admin" />
-        </div>
-        <div class="col">
-          <label>סיסמה</label>
-          <input id="login-pass" type="password" autocomplete="current-password" value="1234" />
-        </div>
-        <div class="col" style="align-self:end">
-          <button id="login-btn" class="btn">התחבר</button>
-        </div>
+        <strong>לוג עדכונים אחרונים</strong>
+        <span id="logMeta" class="pill">—</span>
+        <div class="spacer"></div>
+        <button id="refreshLog" class="ghost">רענן</button>
       </div>
-      <div class="muted" style="margin-top:8px">* זהו אימות מקומי בלבד (לא סיסמת Supabase).</div>
-    </section>
+      <ul id="logList" class="list">
+        <li class="muted">טוען…</li>
+      </ul>
+    </div>
 
-    <!-- כרטיס פעולה ראשי -->
-    <section id="app-card" class="card" style="display:none">
-      <div class="row" style="align-items:center;gap:16px">
-        <button id="pickCustomer" class="btn">בחר לקוח</button>
-        <div style="flex:1">
-          <div class="muted">לקוח נוכחי</div>
-          <div id="customerName">לא נבחר</div>
-        </div>
+    <!-- בחירת לקוח -->
+    <div class="card">
+      <div class="row" style="margin-bottom:10px">
+        <button id="pickCustomer">בחר לקוח</button>
+        <div class="spacer"></div>
+        <span class="muted">לקוח נוכחי</span>
       </div>
+      <input id="currentCustomer" class="muted" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px" placeholder="לא נבחר" disabled />
+      <div id="customerSummary" class="muted" style="margin-top:8px">—</div>
+    </div>
 
-      <div id="coupons-area" style="margin-top:16px">
-        <div class="empty">לא נבחר לקוח.</div>
+    <!-- טבלת שוברים -->
+    <div id="customerCoupons" class="card" style="display:none">
+      <div class="row">
+        <strong>שוברים</strong>
+        <div class="spacer"></div>
+        <span id="couponMeta" class="pill">—</span>
       </div>
-    </section>
-
-    <!-- Debug -->
-    <section id="debug-box" class="card">
-      <div class="row" style="align-items:center">
-        <div class="pill" id="ver-pill">v12</div>
-        <div class="pill" id="ts-pill"></div>
-      </div>
-      <details open>
-        <summary>דיבאג</summary>
-        <div id="debug-body" class="muted" style="margin-top:8px;white-space:pre-line"></div>
-      </details>
-    </section>
-
-    <!-- Workflow log (5 אחרונות) -->
-    <section id="wf-box" class="card">
-      <h2 class="section-title">לוג אוטומציה – 5 ריצות אחרונות</h2>
-      <div id="wf-body" class="muted">טוען…</div>
-    </section>
+      <div id="couponTable" style="margin-top:8px"></div>
+    </div>
   </div>
 
-  <!-- Supabase client (אותו קובץ שיש לך בריפו) -->
-  <script type="module" src="./supabaseClient.js?v=12"></script>
+  <script>
+  // יציאה — ניקוי סטורג'
+  document.getElementById("logoutBtn").onclick = () => {
+    try { localStorage.clear(); sessionStorage.clear(); } catch(_) {}
+    location.reload();
+  };
 
-  <script type="module">
-    /********* הגדרות אימות מקומי *********/
-    const LOCAL_USER = 'admin';
-    const LOCAL_PASS = '1234';
-    const AUTH_KEY = 'goodi-authed';
+  // לוגין לוקלי פשוט
+  (function(){
+    const LS='goodi_is_logged_in', box=document.getElementById('login-box');
+    if(localStorage.getItem(LS)==='1'){ box.style.display='none'; document.documentElement.dataset.goodiAuthed='1'; }
+    document.getElementById('login-btn').addEventListener('click',()=>{
+      const u=document.getElementById('login-user').value.trim();
+      const p=document.getElementById('login-pass').value.trim();
+      if(u==='admin' && p==='1234'){ localStorage.setItem(LS,'1'); box.style.display='none'; document.documentElement.dataset.goodiAuthed='1'; document.dispatchEvent(new CustomEvent('goodi:authed')); }
+      else{ const m=document.getElementById('login-msg'); m.textContent='שגיאת התחברות'; setTimeout(()=>m.textContent='',2000); }
+    });
+  })();
 
-    /********* ייבוא הלקוח של סופאבייס *********/
-    import { supabase } from './supabaseClient.js';
+  (async function(){
+    // מחכים לקליינט
+    const ready = await window.supabaseReady;
+    if(!ready || !ready.ok){ console.error('Supabase not ready'); return; }
+    const supabase = ready.client;
 
-    /********* אלמנטים *********/
-    const loginCard = document.getElementById('login-card');
-    const appCard   = document.getElementById('app-card');
-    const logoutBtn = document.getElementById('logout');
-    const loginBtn  = document.getElementById('login-btn');
-    const loginUser = document.getElementById('login-user');
-    const loginPass = document.getElementById('login-pass');
-
-    const pickBtn   = document.getElementById('pickCustomer');
-    const nameBox   = document.getElementById('customerName');
-    const couponsArea = document.getElementById('coupons-area');
-
-    const dbgBody   = document.getElementById('debug-body');
-    const tsPill    = document.getElementById('ts-pill');
-
-    /********* עזר *********/
-    const stamp = () => new Date().toISOString().replace('T',' ').slice(0,16);
-    const setDebug = (obj) => {
-      dbgBody.textContent = Object.entries(obj).map(([k,v])=>`${k}: ${v}`).join('\n');
-    };
-
-    /********* הצגת מסכי התחברות/אפליקציה *********/
-    function refreshAuthUI(){
-      const ok = localStorage.getItem(AUTH_KEY)==='1';
-      loginCard.style.display = ok ? 'none' : '';
-      appCard.style.display   = ok ? '' : 'none';
-      logoutBtn.style.display = ok ? '' : 'none';
-      if(ok){ loadCustomersCount(); } // כדי לראות שמחובר
-      setDebug({
-        גרסה: 'v12',
-        סטטוס: ok ? 'מחובר' : 'ממתין להתחברות',
-        'customers': ok ? '(יבוא דינמי)' : 0,
-        'שגיאה אחרונה': '—'
-      });
+    // לוג 5 אחרונים
+    async function loadImportLogs(){
+      const $list=document.getElementById('logList');
+      const $meta=document.getElementById('logMeta');
+      $list.innerHTML='<li class="muted">טוען…</li>';
+      const { data, error } = await supabase.from('import_logs').select('*').order('run_time',{ascending:false}).limit(5);
+      if(error){ $list.innerHTML='<li class="muted">שגיאה בטעינת לוגים</li>'; $meta.textContent='שגיאה'; return; }
+      if(!data?.length){ $list.innerHTML='<li class="muted">אין ריצות קודמות</li>'; $meta.textContent='0'; return; }
+      $list.innerHTML=''; data.forEach(r=>{ const li=document.createElement('li'); const dt=new Date(r.run_time).toLocaleString('he-IL'); li.textContent=`${dt} — ${r.records_imported} רשומות (${r.status})`; $list.appendChild(li); });
+      $meta.textContent=`סה״כ: ${data.length}`;
     }
+    document.getElementById('refreshLog').onclick=loadImportLogs;
+    loadImportLogs();
 
-    /********* התחברות/יציאה *********/
-    loginBtn.addEventListener('click', () => {
-      const u = loginUser.value.trim();
-      const p = loginPass.value.trim();
-      if(u===LOCAL_USER && p===LOCAL_PASS){
-        localStorage.setItem(AUTH_KEY,'1');
-        refreshAuthUI();
-        loadCustomersCount();
-      }else{
-        alert('שם משתמש או סיסמה שגויים');
-      }
-    });
+    // בחירת לקוח + טעינת שוברים
+    async function pickCustomer(){
+      if(document.documentElement.dataset.goodiAuthed!=='1'){ alert('יש להתחבר'); return; }
+      const { data, error } = await supabase.from('customers').select('customer_id,name').order('name',{ascending:true}).limit(200);
+      if(error || !data?.length){ alert('לא נמצאו לקוחות'); return; }
+      const picked = prompt('בחר לקוח (הקלד בדיוק אחד מהשמות):\n\n'+data.map(c=>c.name).join('\n'));
+      if(!picked) return;
+      const row = data.find(c=>c.name===picked);
+      if(!row){ alert('לא נמצא'); return; }
 
-    logoutBtn.addEventListener('click', () => {
-      localStorage.removeItem(AUTH_KEY);
-      nameBox.textContent = 'לא נבחר';
-      couponsArea.innerHTML = '<div class="empty">התנתקת.</div>';
-      refreshAuthUI();
-    });
+      document.getElementById('currentCustomer').value = row.name || '(ללא שם)';
+      document.getElementById('customerSummary').textContent = `מזהה: ${row.customer_id ?? '-'}`;
 
-    /********* לקוחות – בחירה והצגה *********/
-    pickBtn.addEventListener('click', async () => {
-      try{
-        const { data, error } = await supabase.from('customers')
-          .select('customer_id,name')
-          .order('name');
-        if(error) throw error;
-        if(!data?.length){ alert('אין לקוחות בטבלה.'); return; }
-
-        const name = prompt('חפש שם לקוח והקלד בדיוק כבתוצאות:\n\n' + data.map(r=>r.name).join('\n'));
-        const chosen = data.find(r => r.name === name);
-        if(!chosen){ return; }
-
-        nameBox.textContent = chosen.name;
-        await showCustomerCoupons(chosen.customer_id, chosen.name);
-      }catch(err){
-        console.error(err);
-        alert('שגיאה בטעינת הלקוחות');
-      }
-    });
-
-    async function showCustomerCoupons(customerId, customerName){
-      couponsArea.innerHTML = '<div class="muted">טוען שוברים…</div>';
-      const { data, error } = await supabase
+      const { data: coupons, error: cErr } = await supabase
         .from('coupons')
-        .select('id,date,amount,redeemed,redeemed_at,source_label')
-        .eq('customer_id', customerId)
-        .order('date',{ascending:false})
-        .limit(200);
+        .select('id,date,amount,redeemed,redeemed_at')
+        .eq('customer_id', row.customer_id)
+        .order('date',{ascending:false});
 
-      if(error){ couponsArea.innerHTML = `<div class="empty">שגיאה: ${error.message}</div>`; return; }
-      if(!data?.length){ couponsArea.innerHTML = `<div class="empty">אין שוברים ל<strong>${customerName}</strong>.</div>`; return; }
+      const $wrap=document.getElementById('customerCoupons');
+      const $tbl =document.getElementById('couponTable');
+      const $meta=document.getElementById('couponMeta');
 
-      const fmt = (d)=> new Date(d).toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit',year:'numeric'});
-      const rows = data.map(r=>`
+      if(cErr){ $wrap.style.display='block'; $tbl.innerHTML='<div class="muted">שגיאה בטעינת שוברים</div>'; $meta.textContent='שגיאה'; return; }
+      if(!coupons?.length){ $wrap.style.display='block'; $tbl.innerHTML='<div class="muted">אין שוברים ללקוח</div>'; $meta.textContent='0'; return; }
+
+      const rows=coupons.map(c=>`
         <tr>
-          <td>${fmt(r.date)}</td>
-          <td>₪ ${Number(r.amount).toFixed(2)}</td>
-          <td>${r.redeemed ? 'מומש' : 'פתוח'}</td>
-          <td>${r.redeemed_at ? new Date(r.redeemed_at).toLocaleString('he-IL') : '—'}</td>
-          <td>${r.source_label ?? ''}</td>
-          <td>
-            ${r.redeemed
-              ? `<button class="btn btn-outline" data-act="undo" data-id="${r.id}">בטל מימוש</button>`
-              : `<button class="btn" data-act="do" data-id="${r.id}">סמן כמומש</button>`
-            }
-          </td>
-        </tr>
-      `).join('');
+          <td>${new Date(c.date).toLocaleDateString('he-IL')}</td>
+          <td>₪ ${Number(c.amount||0).toFixed(2)}</td>
+          <td>${c.redeemed?'✔︎':'—'}</td>
+        </tr>`).join('');
 
-      couponsArea.innerHTML = `
-        <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div><strong>כרטיס לקוח:</strong> ${customerName}</div>
-          <div class="muted">סה"כ ${data.length} שוברים</div>
-        </div>
-        <div style="overflow:auto">
-        <table style="width:100%;border-collapse:collapse">
-          <thead>
-            <tr style="background:#f1f5f9">
-              <th style="text-align:right;padding:10px;border-bottom:1px solid var(--border)">תאריך</th>
-              <th style="text-align:right;padding:10px;border-bottom:1px solid var(--border)">סכום</th>
-              <th style="text-align:right;padding:10px;border-bottom:1px solid var(--border)">סטטוס</th>
-              <th style="text-align:right;padding:10px;border-bottom:1px solid var(--border)">מומש בתאריך</th>
-              <th style="text-align:right;padding:10px;border-bottom:1px solid var(--border)">מקור</th>
-              <th style="text-align:right;padding:10px;border-bottom:1px solid var(--border)">פעולה</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-        </div>
-      `;
-
-      couponsArea.querySelectorAll('button[data-id]').forEach(btn=>{
-        btn.addEventListener('click', async ()=>{
-          const id = Number(btn.dataset.id);
-          const act = btn.dataset.act;
-          if(act==='do'){
-            // סימון כמומש
-            if(!confirm('לאשר מימוש שובר?')) return;
-            const { error } = await supabase.from('coupons')
-              .update({ redeemed:true, redeemed_at: new Date().toISOString() })
-              .eq('id', id);
-            if(error){ alert('שגיאה: '+error.message); return; }
-          }else{
-            // ביטול מימוש
-            const approver = prompt('שם מבטל המימוש:');
-            if(!approver) return;
-            const { error } = await supabase.from('coupons')
-              .update({ redeemed:false, redeemed_at: null, source_label: approver })
-              .eq('id', id);
-            if(error){ alert('שגיאה: '+error.message); return; }
-          }
-          await showCustomerCoupons(customerId, customerName);
-        });
-      });
+      $wrap.style.display='block';
+      $meta.textContent=String(coupons.length);
+      $tbl.innerHTML=`
+        <table>
+          <thead><tr><th>תאריך</th><th>סכום</th><th>מומש</th></tr></thead>
+        <tbody>${rows}</tbody></table>`;
     }
-
-    /********* ספירה לדיבאג – לוודא שהחיבור טוב *********/
-    async function loadCustomersCount(){
-      try{
-        const { count, error } = await supabase
-          .from('customers')
-          .select('customer_id', { count: 'exact', head:true });
-        if(error) throw error;
-        setDebug({
-          גרסה: 'v12',
-          סטטוס: 'מחובר יוצר',
-          customers: count ?? 0,
-          'שגיאה אחרונה': '—'
-        });
-      }catch(err){
-        setDebug({
-          גרסה: 'v12',
-          סטטוס: 'שגיאה',
-          customers: 0,
-          'שגיאה אחרונה': err.message
-        });
-      }
-    }
-
-    /********* לוג ריצות GitHub Actions (פומבי, ללא טוקן) *********/
-    async function loadWorkflowLog(){
-      const owner = 'ranyais h'.replace(' ',''); // בטוח/אוטומטי: להסיר רווחים
-      const repo  = 'Goodi';
-      const url   = `https://api.github.com/repos/${owner}/${repo}/actions/workflows/goodi.yml/runs?per_page=5`;
-      try{
-        const res = await fetch(url);
-        if(!res.ok) throw new Error('HTTP '+res.status);
-        const json = await res.json();
-        const runs = json.workflow_runs ?? [];
-        if(!runs.length){ document.getElementById('wf-body').textContent='אין ריצות להצגה.'; return; }
-        const html = runs.map(r=>{
-          const d = new Date(r.created_at).toLocaleString('he-IL');
-          const ok = r.conclusion === 'success';
-          const status = ok ? '✔️ הצלחה' : (r.status === 'in_progress' ? '⏳ רץ' : '❌ כשל');
-          return `<div class="pill">${d}</div> ${status} · ${r.event} · run #${r.run_number}`;
-        }).join('<br/>');
-        document.getElementById('wf-body').innerHTML = html;
-      }catch(e){
-        document.getElementById('wf-body').textContent = 'שגיאה בטעינת לוג מהריפו (אולי הגבלה ללא טוקן).';
-      }
-    }
-
-    /********* הפעלה *********/
-    tsPill.textContent = stamp();
-    refreshAuthUI();
-    loadWorkflowLog();
+    document.getElementById('pickCustomer').onclick=pickCustomer;
+  })();
   </script>
 </body>
 </html>
