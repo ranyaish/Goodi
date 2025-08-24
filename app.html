@@ -55,38 +55,52 @@
       <button id="logoutBtn" class="ghost">יציאה</button>
     </div>
   </header>
-
-  <!-- פס קומפקטי: ריצה אחרונה מגיטהאב (מקור אחד מספיק) -->
-  <div id="wf-mini" style="direction:rtl;max-width:920px;margin:16px auto 0;font-family:system-ui">
-    <div style="font-size:13px;color:#6b7280;margin-bottom:6px">עדכון אחרון</div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid #e5e7eb;border-radius:10px;padding:8px 10px">
-      <span id="wf-mini-run" style="font-family:ui-monospace,Menlo,Consolas,monospace">—</span>
-      <span id="wf-mini-status" style="border:1px solid #e5e7eb;border-radius:999px;padding:2px 8px;font-size:12px;color:#6b7280">—</span>
-      <span id="wf-mini-time" style="color:#6b7280">—</span>
-       <a id="wf-mini-url" target="_blank" rel="noopener" style="margin-inline-start:auto;color:#2563eb;text-decoration:none">פתח לוג</a> 
-    </div>
+  
+<!-- פס קומפקטי: ריצה אחרונה מגיטהאב (בלי "פתח לוג") -->
+<div id="wf-mini" style="direction:rtl;max-width:920px;margin:16px auto 0;font-family:system-ui">
+  <div style="font-size:13px;color:#6b7280;margin-bottom:6px">עדכון אחרון</div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid #e5e7eb;border-radius:10px;padding:8px 10px">
+    <span id="wf-mini-run" style="font-family:ui-monospace,Menlo,Consolas,monospace">—</span>
+    <span id="wf-mini-status" style="border:1px solid #e5e7eb;border-radius:999px;padding:2px 8px;font-size:12px;color:#6b7280">—</span>
+    <span id="wf-mini-time" style="color:#6b7280">—</span>
   </div>
-  <script>
-  (async () => {
-    const repo='ranyaish/Goodi', url=`https://api.github.com/repos/${repo}/actions/runs?per_page=1`;
-    const $=id=>document.getElementById(id);
-    const runEl=$('wf-mini-run'), stEl=$('wf-mini-status'), tEl=$('wf-mini-time'), aEl=$('wf-mini-url');
-    async function loadOne(){
-      try{
-        const r=await fetch(url,{headers:{'Accept':'application/vnd.github+json'},cache:'no-store'});
-        if(!r.ok) throw 0; const js=await r.json(); const x=js.workflow_runs?.[0]; if(!x) throw 0;
-        runEl.textContent=`run #${x.run_number}`; aEl.href=x.html_url;
-        tEl.textContent=new Date(x.created_at).toLocaleString('he-IL',{hour12:false});
-        const s=(x.conclusion||x.status||'').toLowerCase();
-        stEl.textContent=s||'—';
-        stEl.style.background=s==='success'?'#ecfdf5':(s==='failure'||s==='cancelled'?'#fef2f2':'#f3f4f6');
-        stEl.style.color     =s==='success'?'#065f46':(s==='failure'||s==='cancelled'?'#991b1b':'#374151');
-        stEl.style.borderColor=s==='success'?'#a7f3d0':(s==='failure'||s==='cancelled'?'#fecaca':'#e5e7eb');
-      }catch(_){}
+</div>
+
+<script>
+(async () => {
+  const repo = 'ranyaish/Goodi';
+  const url  = `https://api.github.com/repos/${repo}/actions/runs?per_page=1`;
+
+  const runEl = document.getElementById('wf-mini-run');
+  const stEl  = document.getElementById('wf-mini-status');
+  const tEl   = document.getElementById('wf-mini-time');
+
+  async function loadOne() {
+    try {
+      const r = await fetch(url, { headers:{'Accept':'application/vnd.github+json'}, cache:'no-store' });
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const js = await r.json();
+      const x = js.workflow_runs?.[0];
+      if(!x) throw new Error('אין ריצות');
+
+      runEl.textContent = `run #${x.run_number}`;
+      tEl.textContent   = new Date(x.created_at).toLocaleString('he-IL',{hour12:false});
+
+      const s = (x.conclusion || x.status || '').toLowerCase();
+      stEl.textContent = s || '—';
+      stEl.style.background = s==='success' ? '#ecfdf5' : (s==='failure'||s==='cancelled' ? '#fef2f2' : '#f3f4f6');
+      stEl.style.color      = s==='success' ? '#065f46' : (s==='failure'||s==='cancelled' ? '#991b1b' : '#374151');
+      stEl.style.borderColor= s==='success' ? '#a7f3d0' : (s==='failure'||s==='cancelled' ? '#fecaca' : '#e5e7eb');
+    } catch(e) {
+      runEl.textContent = '—';
+      stEl.textContent  = 'שגיאה';
+      tEl.textContent   = '';
     }
-    loadOne(); setInterval(loadOne,5*60*1000);
-  })();
-  </script>
+  }
+  loadOne();
+  setInterval(loadOne, 5*60*1000);
+})();
+</script>
 
   <div class="wrap">
     <!-- כניסה בסיסית -->
