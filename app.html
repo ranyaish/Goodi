@@ -27,6 +27,8 @@
     /* מיני־לוג למעלה */
     #wf-mini{direction:rtl;max-width:920px;margin:14px auto 0;font-family:inherit;padding:0 14px}
     #wf-mini .box{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid #e5e7eb;border-radius:10px;padding:8px 10px}
+    /* הסתרת "פתח לוג" */
+    #wf-mini-url{ display:none !important; }
   </style>
 
   <!-- Supabase bootstrap שלך (מחייב) -->
@@ -195,17 +197,18 @@
 
       const rows = coupons.map(c=>{
         const d = c.date ? new Date(c.date).toLocaleDateString('he-IL') : '—';
-        const amt = `₪ ${Number(c.amount||0).toFixed(2)}`;
+        const amtNum = Number(c.amount||0);
+        const amt = `₪ ${amtNum.toFixed(2)}`;
         const redeemedAtText = (c.redeemed && c.redeemed_at)
           ? new Date(c.redeemed_at).toLocaleString('he-IL')
           : '—';
         const actions = c.redeemed
           ? `<button type="button" class="small ghost" data-action="unredeem" data-id="${c.id}">בטל מימוש</button>`
           : `<button type="button" class="small" data-action="redeem" data-id="${c.id}">מימוש</button>`;
-        return `<tr>
-          <td>${d}</td>
-          <td>${amt}</td>
-          <td>${redeemedAtText}</td>
+        return `<tr data-rowid="${c.id}" data-amount="${amtNum}">
+          <td class="col-date">${d}</td>
+          <td class="col-amt">${amt}</td>
+          <td class="col-redeemed">${redeemedAtText}</td>
           <td class="actions">${actions}</td>
         </tr>`;
       }).join('');
@@ -232,32 +235,80 @@
       });
     }
 
-    // ====== מימוש שובר (מוסיף redeemed_at) ללא "קפיצה" ======
+    // ====== עוזר: עדכון סכום פנוי למימוש מקומי ======
+    function adjustFreeTotal(delta){
+      const el = document.getElementById('freeTotal');
+      const m = el.textContent.match(/([\d,.]+)$/); // מוצא מספר בסוף
+      let cur = 0;
+      if (m && m[1]) {
+        cur = Number(m[1].replace(/[,]/g,'')); // במקרה של פסיקים
+      }
+      const next = Math.max(0, cur + delta);
+      el.textContent = 'פנוי למימוש: ₪ ' + next.toFixed(2);
+    }
+
+    // ====== מימוש שובר – עדכון נקודתי (ללא ריענון טבלה) ======
     async function handleRedeem(couponId){
       if (!currentCustomer || !sb) return;
-      const y = window.scrollY; // שמירת מיקום הגלילה
+
+      const tr = document.querySelector(`tr[data-rowid="${couponId}"]`);
+      if (!tr) return;
+
+      const amount = Number(tr.getAttribute('data-amount') || '0');
+
+      // עדכון ב-DB
       const { error } = await sb.from('coupons').update({
         redeemed: true,
         redeemed_at: new Date().toISOString()
       }).eq('id', couponId).limit(1);
       if (error) { alert('שגיאה במימוש'); return; }
-      await loadCustomer();
-      window.scrollTo(0, y);    // החזרת המיקום
+
+      // עדכון ב-DOM
+      tr.querySelector('.col-redeemed').textContent =
+        new Date().toLocaleString('he-IL');
+      // מחליף כפתור לפעולת "בטל מימוש"
+      const actCell = tr.querySelector('.actions');
+      actCell.innerHTML =
+        `<button type="button" class="small ghost" data-action="unredeem" data-id="${couponId}">בטל מימוש</button>`;
+      actCell.querySelector('[data-action="unredeem"]').addEventListener(
+        'click', ()=>handleUnredeem(couponId)
+      );
+
+      // סכום פנוי פוחת
+      adjustFreeTotal(-amount);
     }
 
-    // ====== ביטול מימוש (דורש שם מאשר) ללא "קפיצה" ======
+    // ====== ביטול מימוש – עדכון נקודתי (ללא ריענון טבלה) ======
     async function handleUnredeem(couponId){
       if (!currentCustomer || !sb) return;
+
       const approver = prompt('שם המאשר ביטול מימוש (חובה):');
       if(!approver || !approver.trim()){ alert('נדרש שם מאשר'); return; }
-      const y = window.scrollY;
+
+      const tr = document.querySelector(`tr[data-rowid="${couponId}"]`);
+      if (!tr) return;
+
+      const amount = Number(tr.getAttribute('data-amount') || '0');
+
+      // עדכון ב-DB
       const { error } = await sb.from('coupons').update({
         redeemed: false,
         redeemed_at: null
       }).eq('id', couponId).limit(1);
       if (error) { alert('שגיאה בביטול'); return; }
-      await loadCustomer();
-      window.scrollTo(0, y);
+
+      // עדכון ב-DOM
+      tr.querySelector('.col-redeemed').textContent = '—';
+      // מחליף כפתור לפעולת "מימוש"
+      const actCell = tr.querySelector('.actions');
+      actCell.innerHTML =
+        `<button type="button" class="small" data-action="redeem" data-id="${couponId}">מימוש</button>`;
+      actCell.querySelector('[data-action="redeem"]').addEventListener(
+        'click', ()=>handleRedeem(couponId)
+      );
+
+      // סכום פנוי גדל
+      adjustFreeTotal(+amount);
     }
   </script>
 </body>
