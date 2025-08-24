@@ -300,5 +300,91 @@
 
   })();
   </script>
+
+
+  <script>
+/* NO-REFRESH PATCH: מימוש/ביטול מעדכן לוקאלית בלי לקרוא loadCustomer() */
+(function(){
+  // עוזרים
+  function parseAmount(txt){
+    if(!txt) return 0;
+    const n = String(txt).replace(/[^\d.,-]/g,'').replace(/,/g,'');
+    return Number(n)||0;
+  }
+  function setRedeemedCell(tr, dateStr){
+    const cell = tr.querySelector('.col-redeemed') || tr.children[2];
+    if(cell) cell.textContent = dateStr;
+  }
+  function adjustFreeTotal(delta){
+    const el = document.getElementById('freeTotal');
+    if(!el) return;
+    const m = el.textContent.match(/([\d.,-]+)$/);
+    let cur = m && m[1] ? Number(m[1].replace(/,/g,'')) : 0;
+    const next = Math.max(0, cur + delta);
+    el.textContent = 'פנוי למימוש: ₪ ' + next.toFixed(2);
+  }
+  async function getSb(){
+    const r = await window.supabaseReady;
+    if(!r || !r.ok || !r.client) throw new Error('Supabase not ready');
+    return r.client;
+  }
+
+  // מאזין "תופס" ברמת הדוקומנט (capturing) כדי למנוע מאזינים קיימים שמרעננים
+  document.addEventListener('click', async (e)=>{
+    const btn = e.target.closest('[data-action]');
+    if(!btn) return;
+
+    const action = btn.dataset.action;          // 'redeem' או 'unredeem'
+    const id     = btn.dataset.id;
+    const tr     = btn.closest('tr');
+    if(!action || !id || !tr) return;
+
+    // מונעים שהמאזינים הישנים ירוצו (וככה לא יהיה ריענון)
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+
+    // נתוני סכום מהשורה
+    const amtCell = tr.querySelector('.col-amt') || tr.children[1];
+    const amount  = parseAmount(amtCell && amtCell.textContent);
+
+    let sb;
+    try { sb = await getSb(); } catch { alert('חיבור DB לא מוכן'); return; }
+
+    if(action === 'redeem'){
+      const { error } = await sb.from('coupons').update({
+        redeemed: true,
+        redeemed_at: new Date().toISOString()
+      }).eq('id', id).limit(1);
+      if(error){ alert('שגיאה במימוש'); return; }
+
+      // עדכון מקומי בלבד
+      setRedeemedCell(tr, new Date().toLocaleString('he-IL'));
+      btn.outerHTML =
+        `<button type="button" class="small ghost" data-action="unredeem" data-id="${id}">בטל מימוש</button>`;
+      adjustFreeTotal(-amount);
+    }
+
+    if(action === 'unredeem'){
+      const approver = prompt('שם המאשר ביטול מימוש (חובה):');
+      if(!approver || !approver.trim()){ alert('נדרש שם מאשר'); return; }
+
+      const { error } = await sb.from('coupons').update({
+        redeemed: false,
+        redeemed_at: null
+      }).eq('id', id).limit(1);
+      if(error){ alert('שגיאה בביטול'); return; }
+
+      // עדכון מקומי בלבד
+      setRedeemedCell(tr, '—');
+      btn.outerHTML =
+        `<button type="button" class="small" data-action="redeem" data-id="${id}">מימוש</button>`;
+      adjustFreeTotal(+amount);
+    }
+  }, true); // ← חשוב: capture=true כדי לתפוס לפני המאזינים הקיימים
+})();
+</script>
+
+  
 </body>
 </html>
