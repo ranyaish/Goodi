@@ -5,33 +5,44 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>מערכת – גודי שוברים</title>
   <style>
+    :root { --muted:#6b7280; --border:#e5e7eb; --pill:#f1f5f9; }
     body{font-family:system-ui,Arial,Heebo,sans-serif;background:#fff;color:#111;margin:0}
-    header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #eee}
+    header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border)}
     .brand{display:flex;gap:12px;align-items:center}
     .brand img{width:44px;height:44px;border-radius:6px;object-fit:cover}
     h1{font-size:22px;margin:0}
     .wrap{max-width:920px;margin:20px auto;padding:0 14px}
-    .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px;margin:12px 0}
+    .card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;margin:12px 0}
     .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .spacer{flex:1}
-    .muted{color:#6b7280}
-    .pill{font-size:12px;background:#f1f5f9;border:1px solid #e5e7eb;border-radius:999px;padding:3px 8px}
-    button{border:1px solid #e5e7eb;background:#0ea5e9;color:#fff;border-radius:10px;padding:10px 14px;cursor:pointer}
+    .muted{color:var(--muted)}
+    .pill{font-size:12px;background:var(--pill);border:1px solid var(--border);border-radius:999px;padding:3px 8px}
+    button{border:1px solid var(--border);background:#0ea5e9;color:#fff;border-radius:10px;padding:10px 14px;cursor:pointer}
     button.ghost{background:#fff;color:#111}
     button.small{padding:6px 10px;border-radius:8px}
     button.small.ghost{background:#fff;color:#111}
     table{width:100%;border-collapse:collapse}
-    th,td{padding:10px;border-bottom:1px solid #eee;text-align:right;vertical-align:middle}
+    th,td{padding:10px;border-bottom:1px solid var(--border);text-align:right;vertical-align:middle}
     thead th{background:#f8fafc}
     td.actions{white-space:nowrap}
+
     /* מיני־לוג למעלה */
     #wf-mini{direction:rtl;max-width:920px;margin:14px auto 0;font-family:inherit;padding:0 14px}
-    #wf-mini .box{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid #e5e7eb;border-radius:10px;padding:8px 10px}
+    #wf-mini .box{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid var(--border);border-radius:10px;padding:8px 10px}
     /* הסתרת "פתח לוג" */
     #wf-mini-url{ display:none !important; }
+
+    /* מודאל בחירת לקוח */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:50}
+    .modal{width:min(720px,92vw);background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.25);padding:14px}
+    .modal .hdr{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .modal input[type="text"]{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px}
+    .cust-list{max-height:50vh;overflow:auto;margin-top:10px;border:1px solid var(--border);border-radius:10px}
+    .cust-item{padding:10px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9}
+    .cust-item:hover{background:#f8fafc}
   </style>
 
-  <!-- Supabase bootstrap שלך (מחייב) -->
+  <!-- Supabase bootstrap שלך -->
   <script src="./supabaseClient.js"></script>
 </head>
 <body>
@@ -43,9 +54,30 @@
       <span id="wf-mini-run" style="font-family:ui-monospace,Menlo,Consolas,monospace">—</span>
       <span id="wf-mini-status" class="pill">—</span>
       <span id="wf-mini-time" class="muted">—</span>
-      <a id="wf-mini-url" target="_blank" rel="noopener" style="margin-inline-start:auto;color:#2563eb;text-decoration:none">פתח לוג</a>
+      <a id="wf-mini-url" target="_blank" rel="noopener">פתח לוג</a>
     </div>
   </div>
+  <script>
+  (function miniRun(){
+    const repo='ranyaish/Goodi', url=`https://api.github.com/repos/${repo}/actions/runs?per_page=1`;
+    const $=id=>document.getElementById(id);
+    const runEl=$('wf-mini-run'), stEl=$('wf-mini-status'), tEl=$('wf-mini-time'), aEl=$('wf-mini-url');
+    async function loadOne(){
+      try{
+        const r=await fetch(url,{headers:{'Accept':'application/vnd.github+json'},cache:'no-store'});
+        if(!r.ok) throw 0; const js=await r.json(); const x=js.workflow_runs?.[0]; if(!x) throw 0;
+        runEl.textContent=`run #${x.run_number}`; aEl.href=x.html_url;
+        tEl.textContent=new Date(x.created_at).toLocaleString('he-IL',{hour12:false});
+        const s=(x.conclusion||x.status||'').toLowerCase();
+        stEl.textContent=s||'—';
+        stEl.style.background=s==='success'?'#ecfdf5':(s==='failure'||s==='cancelled'?'#fef2f2':'#f3f4f6');
+        stEl.style.color     =s==='success'?'#065f46':(s==='failure'||s==='cancelled'?'#991b1b':'#374151');
+        stEl.style.borderColor=s==='success'?'#a7f3d0':(s==='failure'||s==='cancelled'?'#fecaca':'#e5e7eb');
+      }catch(_){}
+    }
+    loadOne(); setInterval(loadOne, 5*60*1000);
+  })();
+  </script>
 
   <header>
     <div class="brand">
@@ -65,7 +97,7 @@
         <div class="spacer"></div>
         <span class="muted">לקוח נוכחי</span>
       </div>
-      <input id="currentCustomer" class="muted" style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px" placeholder="לא נבחר" disabled />
+      <input id="currentCustomer" class="muted" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:10px" placeholder="לא נבחר" disabled />
       <div id="customerSummary" class="muted" style="margin-top:8px">—</div>
     </div>
 
@@ -81,127 +113,103 @@
     </div>
   </div>
 
+  <!-- Modal בחירת לקוח -->
+  <div id="custModal" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="hdr">
+        <strong>בחר לקוח</strong>
+        <button type="button" class="ghost small" id="custClose">סגור</button>
+      </div>
+      <input type="text" id="custSearch" placeholder="חפש לפי שם לקוח…" autocomplete="off" />
+      <div class="cust-list" id="custList"></div>
+    </div>
+  </div>
+
   <script>
-    // ====== ריצה אחרונה (קומפקטית) ======
-    (function miniRun(){
-      const repo = 'ranyaish/Goodi';
-      const url  = `https://api.github.com/repos/${repo}/actions/runs?per_page=1`;
-      const $ = id => document.getElementById(id);
-      const runEl = $('wf-mini-run'), stEl = $('wf-mini-status'), tEl = $('wf-mini-time'), aEl = $('wf-mini-url');
+    let sb=null;
+    (async()=>{ const r=await window.supabaseReady; if(r?.ok) sb=r.client; else alert('לא מצליח להתחבר ל־Supabase'); })();
 
-      async function loadOne(){
-        try{
-          const r = await fetch(url,{headers:{'Accept':'application/vnd.github+json'},cache:'no-store'});
-          if(!r.ok) throw new Error('HTTP '+r.status);
-          const js = await r.json();
-          const x  = js.workflow_runs?.[0];
-          if(!x) throw new Error('אין ריצות');
+    // יציאה
+    document.getElementById('logoutBtn').onclick=()=>{ try{localStorage.clear();sessionStorage.clear();}catch(_){} location.reload(); };
 
-          runEl.textContent = `run #${x.run_number}`;
-          aEl.href = x.html_url;
-          tEl.textContent = new Date(x.created_at).toLocaleString('he-IL',{hour12:false});
+    // מצב בחירה
+    let currentCustomer=null; // { id, name }
 
-          const s = (x.conclusion || x.status || '').toLowerCase();
-          stEl.textContent = s || '—';
-          stEl.style.background = s==='success' ? '#ecfdf5' : (s==='failure'||s==='cancelled' ? '#fef2f2' : '#f3f4f6');
-          stEl.style.color      = s==='success' ? '#065f46' : (s==='failure'||s==='cancelled' ? '#991b1b' : '#374151');
-          stEl.style.borderColor= s==='success' ? '#a7f3d0' : (s==='failure'||s==='cancelled' ? '#fecaca' : '#e5e7eb');
-        }catch(e){
-          runEl.textContent='—'; stEl.textContent='שגיאה'; tEl.textContent=''; aEl.removeAttribute('href');
-        }
+    // —— מודאל בחירת לקוח עם חיפוש —— //
+    const modal = document.getElementById('custModal');
+    const search= document.getElementById('custSearch');
+    const list  = document.getElementById('custList');
+    const btnPick=document.getElementById('pickCustomer');
+    const btnClose=document.getElementById('custClose');
+    let customersCache=[];
+
+    function openModal(){ modal.style.display='flex'; search.value=''; renderCustomers(customersCache); setTimeout(()=>search.focus(),10); }
+    function closeModal(){ modal.style.display='none'; }
+    btnClose.addEventListener('click', closeModal);
+    modal.addEventListener('click', e=>{ if(e.target===modal) closeModal(); });
+
+    btnPick.addEventListener('click', async ()=>{
+      if(!sb) return alert('חיבור ל־DB עדיין לא מוכן');
+      if(!customersCache.length){
+        const { data, error } = await sb.from('customers').select('customer_id,name').order('name',{ascending:true}).limit(1000);
+        if(error){ alert('שגיאה בטעינת לקוחות'); return; }
+        customersCache = data || [];
       }
-      loadOne(); setInterval(loadOne, 5*60*1000);
-    })();
+      openModal();
+    });
 
-    // ====== חיבור ל-Supabase (דרך הסקריפט שלך) ======
-    let sb = null; // הלקוח
-
-    (async () => {
-      const ready = await window.supabaseReady;
-      if (ready && ready.ok && ready.client) sb = ready.client;
-      else alert('לא מצליח להתחבר ל־Supabase');
-    })();
-
-    // ====== יציאה ======
-    document.getElementById('logoutBtn').onclick = () => {
-      try { localStorage.clear(); sessionStorage.clear(); } catch (_){}
-      location.reload();
-    };
-
-    // ====== בחירת לקוח בסיסית (prompt) ======
-    let currentCustomer = null;  // { id, name }
-
-    async function pickCustomer() {
-      if (!sb) return alert('חיבור ל־DB עדיין לא מוכן');
-
-      const { data, error } = await sb
-        .from('customers')
-        .select('customer_id,name')
-        .order('name',{ascending:true});
-
-      if (error) return alert('שגיאה בטעינת לקוחות');
-      if (!data || !data.length) return alert('אין לקוחות');
-
-      const names = data.map(c=>c.name).join('\n');
-      const picked = prompt('בחר לקוח (הקלד בדיוק):\n\n'+names);
+    function renderCustomers(items){
+      const needle=(search.value||'').trim().toLowerCase();
+      const filtered = !needle ? items : items.filter(c => (c.name||'').toLowerCase().includes(needle));
+      list.innerHTML = filtered.map(c=>`<div class="cust-item" data-id="${c.customer_id}">${c.name}</div>`).join('') || `<div class="cust-item" style="color:#6b7280">אין תוצאות</div>`;
+    }
+    search.addEventListener('input', ()=>renderCustomers(customersCache));
+    list.addEventListener('click', e=>{
+      const el=e.target.closest('.cust-item'); if(!el || !el.dataset.id) return;
+      const picked = customersCache.find(x=> String(x.customer_id)===el.dataset.id);
       if(!picked) return;
+      closeModal();
+      selectCustomer(picked);
+    });
 
-      const row = data.find(c=>c.name===picked);
-      if(!row) return alert('לא נמצא');
-
-      currentCustomer = { id: row.customer_id, name: row.name };
-      document.getElementById('currentCustomer').value = row.name;
-      document.getElementById('customerSummary').textContent = `מזהה: ${row.customer_id ?? '-'}`;
+    async function selectCustomer(cust){
+      currentCustomer = { id: cust.customer_id, name: cust.name };
+      document.getElementById('currentCustomer').value = cust.name || '(ללא שם)';
+      document.getElementById('customerSummary').textContent = `מזהה: ${cust.customer_id ?? '-'}`;
       await loadCustomer();
     }
-    document.getElementById('pickCustomer').onclick = pickCustomer;
 
-    // ====== טעינת שוברים ללקוח ======
+    // —— טעינת שוברים ללקוח —— //
     async function loadCustomer(){
-      if (!currentCustomer || !sb) return;
+      if(!currentCustomer || !sb) return;
 
-      const $wrap = document.getElementById('customerCoupons');
-      const $tbl  = document.getElementById('couponTable');
-      const $meta = document.getElementById('couponMeta');
-      const $free = document.getElementById('freeTotal');
+      const $wrap=document.getElementById('customerCoupons');
+      const $tbl =document.getElementById('couponTable');
+      const $meta=document.getElementById('couponMeta');
+      const $free=document.getElementById('freeTotal');
 
-      $wrap.style.display = 'block';
-      $tbl.innerHTML = `<div class="muted">טוען…</div>`;
-      $meta.textContent = '—';
-      $free.textContent = 'פנוי למימוש: —';
+      $wrap.style.display='block';
+      $tbl.innerHTML='<div class="muted">טוען…</div>';
+      $meta.textContent='—'; $free.textContent='פנוי למימוש: —';
 
-      const { data: coupons, error: cErr } = await sb
+      const { data: coupons, error } = await sb
         .from('coupons')
         .select('id,date,amount,redeemed,redeemed_at')
         .eq('customer_id', currentCustomer.id)
         .order('date',{ascending:false});
 
-      if (cErr) {
-        $tbl.innerHTML = `<div class="muted">שגיאה בטעינת שוברים</div>`;
-        $meta.textContent = 'שגיאה';
-        return;
-      }
-      if (!coupons || !coupons.length) {
-        $tbl.innerHTML = `<div class="muted">אין שוברים ללקוח</div>`;
-        $meta.textContent = '0';
-        return;
-      }
+      if(error){ $tbl.innerHTML='<div class="muted">שגיאה בטעינת שוברים</div>'; $meta.textContent='שגיאה'; return; }
+      if(!coupons?.length){ $tbl.innerHTML='<div class="muted">אין שוברים ללקוח</div>'; $meta.textContent='0'; return; }
 
-      // סכום כולל פנוי
-      const freeSum = coupons
-        .filter(c=>!c.redeemed)
-        .reduce((s,c)=>s + Number(c.amount||0), 0);
+      const freeSum = coupons.filter(c=>!c.redeemed).reduce((s,c)=>s+Number(c.amount||0),0);
       $free.textContent = 'פנוי למימוש: ₪ ' + freeSum.toFixed(2);
-
       $meta.textContent = String(coupons.length);
 
       const rows = coupons.map(c=>{
         const d = c.date ? new Date(c.date).toLocaleDateString('he-IL') : '—';
         const amtNum = Number(c.amount||0);
         const amt = `₪ ${amtNum.toFixed(2)}`;
-        const redeemedAtText = (c.redeemed && c.redeemed_at)
-          ? new Date(c.redeemed_at).toLocaleString('he-IL')
-          : '—';
+        const redeemedAtText = (c.redeemed && c.redeemed_at) ? new Date(c.redeemed_at).toLocaleString('he-IL') : '—';
         const actions = c.redeemed
           ? `<button type="button" class="small ghost" data-action="unredeem" data-id="${c.id}">בטל מימוש</button>`
           : `<button type="button" class="small" data-action="redeem" data-id="${c.id}">מימוש</button>`;
@@ -226,7 +234,7 @@
           <tbody>${rows}</tbody>
         </table>`;
 
-      // חיבור האקשנים
+      // מאזינים לפעולות
       $tbl.querySelectorAll('[data-action="redeem"]').forEach(btn=>{
         btn.addEventListener('click', ()=>handleRedeem(btn.dataset.id));
       });
@@ -235,79 +243,57 @@
       });
     }
 
-    // ====== עוזר: עדכון סכום פנוי למימוש מקומי ======
+    // —— עוזר: עדכון סכום פנוי למימוש מקומי —— //
     function adjustFreeTotal(delta){
-      const el = document.getElementById('freeTotal');
-      const m = el.textContent.match(/([\d,.]+)$/); // מוצא מספר בסוף
-      let cur = 0;
-      if (m && m[1]) {
-        cur = Number(m[1].replace(/[,]/g,'')); // במקרה של פסיקים
-      }
-      const next = Math.max(0, cur + delta);
-      el.textContent = 'פנוי למימוש: ₪ ' + next.toFixed(2);
+      const el=document.getElementById('freeTotal');
+      const m = el.textContent.match(/([\d,.]+)$/);
+      let cur=0; if(m&&m[1]) cur=Number(m[1].replace(/,/g,''));
+      const next=Math.max(0, cur + delta);
+      el.textContent='פנוי למימוש: ₪ ' + next.toFixed(2);
     }
 
-    // ====== מימוש שובר – עדכון נקודתי (ללא ריענון טבלה) ======
+    // —— מימוש שובר: עדכון נקודתי —— //
     async function handleRedeem(couponId){
-      if (!currentCustomer || !sb) return;
+      if(!currentCustomer || !sb) return;
+      const tr=document.querySelector(`tr[data-rowid="${couponId}"]`);
+      if(!tr) return;
+      const amount=Number(tr.getAttribute('data-amount')||'0');
 
-      const tr = document.querySelector(`tr[data-rowid="${couponId}"]`);
-      if (!tr) return;
-
-      const amount = Number(tr.getAttribute('data-amount') || '0');
-
-      // עדכון ב-DB
       const { error } = await sb.from('coupons').update({
-        redeemed: true,
-        redeemed_at: new Date().toISOString()
+        redeemed:true,
+        redeemed_at:new Date().toISOString()
       }).eq('id', couponId).limit(1);
-      if (error) { alert('שגיאה במימוש'); return; }
+      if(error){ alert('שגיאה במימוש'); return; }
 
-      // עדכון ב-DOM
-      tr.querySelector('.col-redeemed').textContent =
-        new Date().toLocaleString('he-IL');
-      // מחליף כפתור לפעולת "בטל מימוש"
-      const actCell = tr.querySelector('.actions');
-      actCell.innerHTML =
-        `<button type="button" class="small ghost" data-action="unredeem" data-id="${couponId}">בטל מימוש</button>`;
-      actCell.querySelector('[data-action="unredeem"]').addEventListener(
-        'click', ()=>handleUnredeem(couponId)
-      );
-
-      // סכום פנוי פוחת
+      // DOM: עדכון מיידי
+      tr.querySelector('.col-redeemed').textContent = new Date().toLocaleString('he-IL');
+      const act=tr.querySelector('.actions');
+      act.innerHTML = `<button type="button" class="small ghost" data-action="unredeem" data-id="${couponId}">בטל מימוש</button>`;
+      act.querySelector('[data-action="unredeem"]').addEventListener('click', ()=>handleUnredeem(couponId));
       adjustFreeTotal(-amount);
     }
 
-    // ====== ביטול מימוש – עדכון נקודתי (ללא ריענון טבלה) ======
+    // —— ביטול מימוש: עדכון נקודתי + שם מאשר —— //
     async function handleUnredeem(couponId){
-      if (!currentCustomer || !sb) return;
-
-      const approver = prompt('שם המאשר ביטול מימוש (חובה):');
+      if(!currentCustomer || !sb) return;
+      const approver=prompt('שם המאשר ביטול מימוש (חובה):');
       if(!approver || !approver.trim()){ alert('נדרש שם מאשר'); return; }
 
-      const tr = document.querySelector(`tr[data-rowid="${couponId}"]`);
-      if (!tr) return;
+      const tr=document.querySelector(`tr[data-rowid="${couponId}"]`);
+      if(!tr) return;
+      const amount=Number(tr.getAttribute('data-amount')||'0');
 
-      const amount = Number(tr.getAttribute('data-amount') || '0');
-
-      // עדכון ב-DB
       const { error } = await sb.from('coupons').update({
-        redeemed: false,
-        redeemed_at: null
+        redeemed:false,
+        redeemed_at:null
       }).eq('id', couponId).limit(1);
-      if (error) { alert('שגיאה בביטול'); return; }
+      if(error){ alert('שגיאה בביטול'); return; }
 
-      // עדכון ב-DOM
+      // DOM: עדכון מיידי
       tr.querySelector('.col-redeemed').textContent = '—';
-      // מחליף כפתור לפעולת "מימוש"
-      const actCell = tr.querySelector('.actions');
-      actCell.innerHTML =
-        `<button type="button" class="small" data-action="redeem" data-id="${couponId}">מימוש</button>`;
-      actCell.querySelector('[data-action="redeem"]').addEventListener(
-        'click', ()=>handleRedeem(couponId)
-      );
-
-      // סכום פנוי גדל
+      const act=tr.querySelector('.actions');
+      act.innerHTML = `<button type="button" class="small" data-action="redeem" data-id="${couponId}">מימוש</button>`;
+      act.querySelector('[data-action="redeem"]').addEventListener('click', ()=>handleRedeem(couponId));
       adjustFreeTotal(+amount);
     }
   </script>
