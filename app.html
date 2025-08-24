@@ -1,70 +1,10 @@
-<!-- ====== GitHub Actions: ריצה אחרונה ====== -->
-<div id="wf-last" style="max-width:680px;margin:12px auto 0;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;direction:rtl">
-  <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
-    <div>
-      <span style="color:#6b7280">גרסת ריצה:</span>
-      <span id="wf-run" style="font-family:ui-monospace,Menlo,Consolas,monospace">—</span>
-      <span id="wf-status" style="border:1px solid #e5e7eb;border-radius:999px;padding:3px 8px;font-size:12px;color:#6b7280">—</span>
-    </div>
-    <small id="wf-time" style="color:#6b7280">—</small>
-  </div>
-  <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-    <span style="color:#6b7280">אירוע:</span><span id="wf-event" style="font-family:ui-monospace,Menlo,Consolas,monospace">—</span>
-    <span style="color:#6b7280;margin-inline-start:10px">קישור:</span>
-    <a id="wf-url" target="_blank" rel="noopener" style="color:#2563eb;text-decoration:none">—</a>
-  </div>
-  <div id="wf-err" style="display:none;margin-top:6px;color:#991b1b;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:6px 8px;font-family:ui-monospace,Menlo,Consolas,monospace"></div>
-  <div style="margin-top:8px"><small style="color:#6b7280">מתעדכן כל 5 דק’</small></div>
-</div>
-
-<script>
-(async function initWf(){
-  const repo = 'ranyaish/Goodi'; // הקפד על רישיות מדויקות
-  const url  = `https://api.github.com/repos/${repo}/actions/runs?per_page=1`;
-
-  const $ = id => document.getElementById(id);
-  const pill=$('wf-status'), run=$('wf-run'), time=$('wf-time'), ev=$('wf-event'), a=$('wf-url'), errBox=$('wf-err');
-
-  async function load(){
-    try{
-      const r = await fetch(url, { headers: { 'Accept':'application/vnd.github+json' }, cache:'no-store' });
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      const data = await r.json();
-      const runObj = (data.workflow_runs && data.workflow_runs[0]) || null;
-      if(!runObj) throw new Error('לא נמצאו ריצות');
-
-      run.textContent  = 'run #'+ runObj.run_number;
-      ev.textContent   = runObj.event;
-      time.textContent = new Date(runObj.created_at).toLocaleString('he-IL', { hour12:false });
-      a.textContent    = 'פתח לוג';
-      a.href           = runObj.html_url;
-
-      const status = (runObj.conclusion || runObj.status || '').toLowerCase();
-      pill.textContent = status || '—';
-      pill.style.background = status==='success' ? '#ecfdf5' : (status==='failure'||status==='cancelled' ? '#fef2f2' : '#f3f4f6');
-      pill.style.color      = status==='success' ? '#065f46' : (status==='failure'||status==='cancelled' ? '#991b1b' : '#374151');
-      pill.style.borderColor= status==='success' ? '#a7f3d0' : (status==='failure'||status==='cancelled' ? '#fecaca' : '#e5e7eb');
-
-      errBox.style.display='none';
-    }catch(e){
-      errBox.style.display='block';
-      errBox.textContent = 'שגיאה: ' + (e && e.message ? e.message : String(e));
-    }
-  }
-  load();
-  setInterval(load, 5*60*1000);
-})();
-</script>
-<!-- ====== /GitHub Actions: ריצה אחרונה ====== -->
-
-
 <!doctype html>
 <html lang="he" dir="rtl">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>גודי שוברים - מערכת ניהול</title>
-   <style>
+  <title>מערכת – גודי שוברים</title>
+  <style>
     body{font-family:system-ui,Arial,Heebo,sans-serif;background:#fff;color:#111;margin:0}
     header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #eee}
     .brand{display:flex;gap:12px;align-items:center}
@@ -72,26 +12,43 @@
     h1{font-size:22px;margin:0}
     .wrap{max-width:920px;margin:20px auto;padding:0 14px}
     .card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px;margin:12px 0}
-    button{border:1px solid #e5e7eb;background:#0ea5e9;color:#fff;border-radius:10px;padding:10px 14px;cursor:pointer}
-    button.ghost{background:#fff;color:#111}
-    .muted{color:#6b7280;font-size:14px}
-    .list{list-style:none;padding:0;margin:10px 0 0}
-    .list li{padding:6px 0;border-bottom:1px dashed #eee}
     .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .spacer{flex:1}
+    .muted{color:#6b7280}
     .pill{font-size:12px;background:#f1f5f9;border:1px solid #e5e7eb;border-radius:999px;padding:3px 8px}
+    button{border:1px solid #e5e7eb;background:#0ea5e9;color:#fff;border-radius:10px;padding:10px 14px;cursor:pointer}
+    button.ghost{background:#fff;color:#111}
+    button.small{padding:6px 10px;border-radius:8px}
+    button.small.ghost{background:#fff;color:#111}
     table{width:100%;border-collapse:collapse}
-    th,td{padding:8px;border-bottom:1px solid #eee;text-align:right}
+    th,td{padding:10px;border-bottom:1px solid #eee;text-align:right;vertical-align:middle}
     thead th{background:#f8fafc}
+    td.actions{white-space:nowrap}
+    /* מיני־לוג למעלה */
+    #wf-mini{direction:rtl;max-width:920px;margin:14px auto 0;font-family:inherit;padding:0 14px}
+    #wf-mini .box{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid #e5e7eb;border-radius:10px;padding:8px 10px}
   </style>
-  <!-- Supabase JS (UMD) -->
-  <script src="https://unpkg.com/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+
+  <!-- Supabase bootstrap שלך (מחייב) -->
+  <script src="./supabaseClient.js"></script>
 </head>
 <body>
+
+  <!-- מיני־לוג (ריצה אחרונה) -->
+  <div id="wf-mini">
+    <div class="muted" style="font-size:13px;margin-bottom:6px">עדכון אחרון</div>
+    <div class="box">
+      <span id="wf-mini-run" style="font-family:ui-monospace,Menlo,Consolas,monospace">—</span>
+      <span id="wf-mini-status" class="pill">—</span>
+      <span id="wf-mini-time" class="muted">—</span>
+      <a id="wf-mini-url" target="_blank" rel="noopener" style="margin-inline-start:auto;color:#2563eb;text-decoration:none">פתח לוג</a>
+    </div>
+  </div>
+
   <header>
     <div class="brand">
       <img src="logo.png" alt="לוגו" />
-      <h1>גודי שוברים - מערכת ניהול</h1>
+      <h1>מערכת – גודי שוברים</h1>
     </div>
     <div class="row">
       <button id="logoutBtn" class="ghost">יציאה</button>
@@ -99,19 +56,6 @@
   </header>
 
   <div class="wrap">
-    <!-- לוג עדכונים אחרונים -->
-    <div class="card">
-      <div class="row">
-        <strong>לוג עדכונים אחרונים</strong>
-        <span id="logMeta" class="pill">—</span>
-        <div class="spacer"></div>
-        <button id="refreshLog" class="ghost">רענן</button>
-      </div>
-      <ul id="logList" class="list">
-        <li class="muted">טוען…</li>
-      </ul>
-    </div>
-
     <!-- בחירת לקוח -->
     <div class="card">
       <div class="row" style="margin-bottom:10px">
@@ -125,8 +69,9 @@
 
     <!-- טבלת שוברים -->
     <div id="customerCoupons" class="card" style="display:none">
-      <div class="row">
+      <div class="row" style="gap:12px">
         <strong>שוברים</strong>
+        <div class="pill" id="freeTotal">פנוי למימוש: —</div>
         <div class="spacer"></div>
         <span id="couponMeta" class="pill">—</span>
       </div>
@@ -135,179 +80,185 @@
   </div>
 
   <script>
-    // ===== חיבור ל-Supabase לקריאה (anon) =====
-    const SUPABASE_URL  = "https://ylqpxwgchwalcblfipsu.supabase.co";
-const SB_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM";
-    const supabase = window.Supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+    // ====== ריצה אחרונה (קומפקטית) ======
+    (function miniRun(){
+      const repo = 'ranyaish/Goodi';
+      const url  = `https://api.github.com/repos/${repo}/actions/runs?per_page=1`;
+      const $ = id => document.getElementById(id);
+      const runEl = $('wf-mini-run'), stEl = $('wf-mini-status'), tEl = $('wf-mini-time'), aEl = $('wf-mini-url');
 
-    // יציאה — ניקוי סטורג'
-    document.getElementById("logoutBtn").onclick = () => {
-      try { localStorage.clear(); sessionStorage.clear(); } catch(_) {}
+      async function loadOne(){
+        try{
+          const r = await fetch(url,{headers:{'Accept':'application/vnd.github+json'},cache:'no-store'});
+          if(!r.ok) throw new Error('HTTP '+r.status);
+          const js = await r.json();
+          const x  = js.workflow_runs?.[0];
+          if(!x) throw new Error('אין ריצות');
+
+          runEl.textContent = `run #${x.run_number}`;
+          aEl.href = x.html_url;
+          tEl.textContent = new Date(x.created_at).toLocaleString('he-IL',{hour12:false});
+
+          const s = (x.conclusion || x.status || '').toLowerCase();
+          stEl.textContent = s || '—';
+          stEl.style.background = s==='success' ? '#ecfdf5' : (s==='failure'||s==='cancelled' ? '#fef2f2' : '#f3f4f6');
+          stEl.style.color      = s==='success' ? '#065f46' : (s==='failure'||s==='cancelled' ? '#991b1b' : '#374151');
+          stEl.style.borderColor= s==='success' ? '#a7f3d0' : (s==='failure'||s==='cancelled' ? '#fecaca' : '#e5e7eb');
+        }catch(e){
+          runEl.textContent='—'; stEl.textContent='שגיאה'; tEl.textContent=''; aEl.removeAttribute('href');
+        }
+      }
+      loadOne(); setInterval(loadOne, 5*60*1000);
+    })();
+
+    // ====== חיבור ל-Supabase (דרך הסקריפט שלך) ======
+    let sb = null; // הלקוח
+
+    (async () => {
+      const ready = await window.supabaseReady;
+      if (ready && ready.ok && ready.client) sb = ready.client;
+      else alert('לא מצליח להתחבר ל־Supabase');
+    })();
+
+    // ====== יציאה ======
+    document.getElementById('logoutBtn').onclick = () => {
+      try { localStorage.clear(); sessionStorage.clear(); } catch (_){}
       location.reload();
     };
 
-    // ===== לוג 5 ריצות אחרונות =====
-    async function loadImportLogs() {
-      const $list = document.getElementById("logList");
-      const $meta = document.getElementById("logMeta");
-      $list.innerHTML = '<li class="muted">טוען…</li>';
+    // ====== בחירת לקוח בסיסית (prompt) ======
+    let currentCustomer = null;  // { id, name }
 
-      const { data, error } = await supabase
-        .from("import_logs")
-        .select("*")
-        .order("run_time", { ascending: false })
-        .limit(5);
-
-      if (error) {
-        $list.innerHTML = `<li class="muted">שגיאה בטעינת לוגים</li>`;
-        $meta.textContent = "שגיאה";
-        return;
-      }
-
-      if (!data || !data.length) {
-        $list.innerHTML = `<li class="muted">אין ריצות קודמות</li>`;
-        $meta.textContent = "0";
-        return;
-      }
-
-      $list.innerHTML = "";
-      data.forEach((log) => {
-        const li = document.createElement("li");
-        const dt = new Date(log.run_time).toLocaleString("he-IL");
-        li.textContent = `${dt} — ${log.records_imported} רשומות (${log.status})`;
-        $list.appendChild(li);
-      });
-      $meta.textContent = `סה״כ: ${data.length}`;
-    }
-    document.getElementById("refreshLog").onclick = loadImportLogs;
-
-    // ===== בחירת לקוח לדוגמה + טעינת שוברים =====
     async function pickCustomer() {
-      const { data, error } = await supabase
-        .from("customers")
-        .select("customer_id,name")
-        .order("name", { ascending: true })
-        .limit(1);
+      if (!sb) return alert('חיבור ל־DB עדיין לא מוכן');
 
-      if (error || !data || !data.length) {
-        alert("לא נמצאו לקוחות");
-        return;
-      }
+      const { data, error } = await sb
+        .from('customers')
+        .select('customer_id,name')
+        .order('name',{ascending:true});
 
-      const customer = data[0];
-      document.getElementById("currentCustomer").value = customer.name || "(ללא שם)";
-      document.getElementById("customerSummary").textContent = `מזהה: ${customer.customer_id || "-"}`;
+      if (error) return alert('שגיאה בטעינת לקוחות');
+      if (!data || !data.length) return alert('אין לקוחות');
 
-      const { data: coupons, error: cErr } = await supabase
-        .from("coupons")
-        .select("id,date,amount,redeemed,redeemed_at")
-        .eq("customer_id", customer.customer_id)
-        .order("date", { ascending: false });
+      const names = data.map(c=>c.name).join('\n');
+      const picked = prompt('בחר לקוח (הקלד בדיוק):\n\n'+names);
+      if(!picked) return;
 
-      const $wrap = document.getElementById("customerCoupons");
-      const $tbl  = document.getElementById("couponTable");
-      const $meta = document.getElementById("couponMeta");
+      const row = data.find(c=>c.name===picked);
+      if(!row) return alert('לא נמצא');
+
+      currentCustomer = { id: row.customer_id, name: row.name };
+      document.getElementById('currentCustomer').value = row.name;
+      document.getElementById('customerSummary').textContent = `מזהה: ${row.customer_id ?? '-'}`;
+      await loadCustomer();
+    }
+    document.getElementById('pickCustomer').onclick = pickCustomer;
+
+    // ====== טעינת שוברים ללקוח ======
+    async function loadCustomer(){
+      if (!currentCustomer || !sb) return;
+
+      const $wrap = document.getElementById('customerCoupons');
+      const $tbl  = document.getElementById('couponTable');
+      const $meta = document.getElementById('couponMeta');
+      const $free = document.getElementById('freeTotal');
+
+      $wrap.style.display = 'block';
+      $tbl.innerHTML = `<div class="muted">טוען…</div>`;
+      $meta.textContent = '—';
+      $free.textContent = 'פנוי למימוש: —';
+
+      const { data: coupons, error: cErr } = await sb
+        .from('coupons')
+        .select('id,date,amount,redeemed,redeemed_at')
+        .eq('customer_id', currentCustomer.id)
+        .order('date',{ascending:false});
 
       if (cErr) {
-        $wrap.style.display = "block";
         $tbl.innerHTML = `<div class="muted">שגיאה בטעינת שוברים</div>`;
-        $meta.textContent = "שגיאה";
+        $meta.textContent = 'שגיאה';
         return;
       }
-
       if (!coupons || !coupons.length) {
-        $wrap.style.display = "block";
         $tbl.innerHTML = `<div class="muted">אין שוברים ללקוח</div>`;
-        $meta.textContent = "0";
+        $meta.textContent = '0';
         return;
       }
 
-      const rows = coupons.map(c =>
-        `<tr>
-          <td>${new Date(c.date).toLocaleDateString("he-IL")}</td>
-          <td>₪ ${Number(c.amount || 0).toFixed(2)}</td>
-          <td>${c.redeemed ? "✔︎" : "—"}</td>
-        </tr>`
-      ).join("");
+      // סכום כולל פנוי
+      const freeSum = coupons
+        .filter(c=>!c.redeemed)
+        .reduce((s,c)=>s + Number(c.amount||0), 0);
+      $free.textContent = 'פנוי למימוש: ₪ ' + freeSum.toFixed(2);
 
-      $wrap.style.display = "block";
-      $meta.textContent = `${coupons.length}`;
+      $meta.textContent = String(coupons.length);
+
+      const rows = coupons.map(c=>{
+        const d = c.date ? new Date(c.date).toLocaleDateString('he-IL') : '—';
+        const amt = `₪ ${Number(c.amount||0).toFixed(2)}`;
+        const redeemedAtText = (c.redeemed && c.redeemed_at)
+          ? new Date(c.redeemed_at).toLocaleString('he-IL')
+          : '—';
+        const actions = c.redeemed
+          ? `<button type="button" class="small ghost" data-action="unredeem" data-id="${c.id}">בטל מימוש</button>`
+          : `<button type="button" class="small" data-action="redeem" data-id="${c.id}">מימוש</button>`;
+        return `<tr>
+          <td>${d}</td>
+          <td>${amt}</td>
+          <td>${redeemedAtText}</td>
+          <td class="actions">${actions}</td>
+        </tr>`;
+      }).join('');
+
       $tbl.innerHTML = `
         <table>
           <thead>
             <tr>
               <th>תאריך</th>
               <th>סכום</th>
-              <th>מומש</th>
+              <th>מימוש (תאריך)</th>
+              <th>פעולות</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>`;
-    }
-    document.getElementById("pickCustomer").onclick = pickCustomer;
 
-    // טעינת הלוגים בכניסה
-    loadImportLogs();
+      // חיבור האקשנים
+      $tbl.querySelectorAll('[data-action="redeem"]').forEach(btn=>{
+        btn.addEventListener('click', ()=>handleRedeem(btn.dataset.id));
+      });
+      $tbl.querySelectorAll('[data-action="unredeem"]').forEach(btn=>{
+        btn.addEventListener('click', ()=>handleUnredeem(btn.dataset.id));
+      });
+    }
+
+    // ====== מימוש שובר (מוסיף redeemed_at) ללא "קפיצה" ======
+    async function handleRedeem(couponId){
+      if (!currentCustomer || !sb) return;
+      const y = window.scrollY; // שמירת מיקום הגלילה
+      const { error } = await sb.from('coupons').update({
+        redeemed: true,
+        redeemed_at: new Date().toISOString()
+      }).eq('id', couponId).limit(1);
+      if (error) { alert('שגיאה במימוש'); return; }
+      await loadCustomer();
+      window.scrollTo(0, y);    // החזרת המיקום
+    }
+
+    // ====== ביטול מימוש (דורש שם מאשר) ללא "קפיצה" ======
+    async function handleUnredeem(couponId){
+      if (!currentCustomer || !sb) return;
+      const approver = prompt('שם המאשר ביטול מימוש (חובה):');
+      if(!approver || !approver.trim()){ alert('נדרש שם מאשר'); return; }
+      const y = window.scrollY;
+      const { error } = await sb.from('coupons').update({
+        redeemed: false,
+        redeemed_at: null
+      }).eq('id', couponId).limit(1);
+      if (error) { alert('שגיאה בביטול'); return; }
+      await loadCustomer();
+      window.scrollTo(0, y);
+    }
   </script>
-
-<!-- ====== GitHub Actions: ריצה אחרונה ====== -->
-<div id="wf-last" style="max-width:680px;margin:12px auto 0;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;direction:rtl">
-  <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
-    <div>
-      <span style="color:#6b7280">גרסת ריצה:</span>
-      <span id="wf-run" style="font-family:ui-monospace,Menlo,Consolas,monospace">—</span>
-      <span id="wf-status" style="border:1px solid #e5e7eb;border-radius:999px;padding:3px 8px;font-size:12px;color:#6b7280">—</span>
-    </div>
-    <small id="wf-time" style="color:#6b7280">—</small>
-  </div>
-  <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-    <span style="color:#6b7280">אירוע:</span><span id="wf-event" style="font-family:ui-monospace,Menlo,Consolas,monospace">—</span>
-    <span style="color:#6b7280;margin-inline-start:10px">קישור:</span>
-    <a id="wf-url" target="_blank" rel="noopener" style="color:#2563eb;text-decoration:none">—</a>
-  </div>
-  <div id="wf-err" style="display:none;margin-top:6px;color:#991b1b;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:6px 8px;font-family:ui-monospace,Menlo,Consolas,monospace"></div>
-  <div style="margin-top:8px"><small style="color:#6b7280">מתעדכן כל 5 דק’</small></div>
-</div>
-
-<script>
-(async function initWf(){
-  const repo = 'ranyaish/Goodi';
-  const url  = `https://api.github.com/repos/${repo}/actions/runs?per_page=1`;
-
-  const $ = id => document.getElementById(id);
-  const pill = $('wf-status'), run=$('wf-run'), time=$('wf-time'), ev=$('wf-event'), a=$('wf-url'), errBox=$('wf-err');
-
-  async function load(){
-    try{
-      const r = await fetch(url, { headers: { 'Accept':'application/vnd.github+json' } });
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      const data = await r.json();
-      const runObj = (data.workflow_runs && data.workflow_runs[0]) || null;
-      if(!runObj) throw new Error('לא נמצאו ריצות');
-
-      run.textContent  = 'run #'+ runObj.run_number;
-      ev.textContent   = runObj.event;
-      time.textContent = new Date(runObj.created_at).toLocaleString('he-IL', { hour12:false });
-      a.textContent    = 'פתח לוג';
-      a.href           = runObj.html_url;
-
-      const status = (runObj.conclusion || runObj.status || '').toLowerCase();
-      pill.textContent = status || '—';
-      pill.style.background = status==='success' ? '#ecfdf5' : (status==='failure'||status==='cancelled' ? '#fef2f2' : '#f3f4f6');
-      pill.style.color      = status==='success' ? '#065f46' : (status==='failure'||status==='cancelled' ? '#991b1b' : '#374151');
-      pill.style.borderColor= status==='success' ? '#a7f3d0' : (status==='failure'||status==='cancelled' ? '#fecaca' : '#e5e7eb');
-
-      errBox.style.display='none';
-    }catch(e){
-      errBox.style.display='block';
-      errBox.textContent = 'שגיאה: ' + (e && e.message ? e.message : String(e));
-    }
-  }
-  load();
-  setInterval(load, 5*60*1000);
-})();
-</script>
-<!-- ====== /GitHub Actions: ריצה אחרונה ====== -->
-  
 </body>
 </html>
