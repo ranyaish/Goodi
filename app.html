@@ -45,21 +45,18 @@
   <!-- Supabase bootstrap שלך -->
   <script src="./supabaseClient.js"></script>
 
-  <style>#wf-mini-url{display:none!important}</style>
-  
-</head>
+  </head>
 <body>
 
-  <!-- מיני־לוג (ריצה אחרונה) -->
-  <div id="wf-mini">
-    <div class="muted" style="font-size:13px;margin-bottom:6px">עדכון אחרון</div>
-    <div class="box">
-      <span id="wf-mini-run" style="font-family:ui-monospace,Menlo,Consolas,monospace">—</span>
-      <span id="wf-mini-status" class="pill">—</span>
-      <span id="wf-mini-time" class="muted">—</span>
-      <a id="wf-mini-url" target="_blank" rel="noopener">פתח לוג</a>
-    </div>
+<!-- מיני־לוג (ריצה אחרונה) -->
+<div id="wf-mini">
+  <div class="muted" style="font-size:13px;margin-bottom:6px">עדכון אחרון</div>
+  <div class="box">
+    <span id="wf-mini-run" style="font-family:ui-monospace,Menlo,Consolas,monospace">—</span>
+    <span id="wf-mini-status" class="pill">—</span>
+    <span id="wf-mini-time" class="muted">—</span>
   </div>
+</div>
   <script>
   (function miniRun(){
     const repo='ranyaish/Goodi', url=`https://api.github.com/repos/${repo}/actions/runs?per_page=1`;
