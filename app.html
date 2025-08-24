@@ -29,10 +29,10 @@
     /* מיני־לוג למעלה */
     #wf-mini{direction:rtl;max-width:920px;margin:14px auto 0;font-family:inherit;padding:0 14px}
     #wf-mini .box{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid var(--border);border-radius:10px;padding:8px 10px}
-    /* הסתרת "פתח לוג" */
+    /* הסתרת "פתח לוג" — שינוי #1 */
     #wf-mini-url{ display:none !important; }
 
-    /* מודאל בחירת לקוח */
+    /* מודאל בחירת לקוח (אם זה מה שרץ אצלך – נשאר כפי שהוא) */
     .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:50}
     .modal{width:min(720px,92vw);background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.25);padding:14px}
     .modal .hdr{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -129,13 +129,11 @@
     let sb=null;
     (async()=>{ const r=await window.supabaseReady; if(r?.ok) sb=r.client; else alert('לא מצליח להתחבר ל־Supabase'); })();
 
-    // יציאה
     document.getElementById('logoutBtn').onclick=()=>{ try{localStorage.clear();sessionStorage.clear();}catch(_){} location.reload(); };
 
-    // מצב בחירה
     let currentCustomer=null; // { id, name }
 
-    // —— מודאל בחירת לקוח עם חיפוש —— //
+    // —— מודאל בחירת לקוח —— //
     const modal = document.getElementById('custModal');
     const search= document.getElementById('custSearch');
     const list  = document.getElementById('custList');
@@ -243,7 +241,7 @@
       });
     }
 
-    // —— עוזר: עדכון סכום פנוי למימוש מקומי —— //
+    // —— עוזר: עדכון סכום פנוי למימוש מקומי (שינוי #2 – ללא ריענון) —— //
     function adjustFreeTotal(delta){
       const el=document.getElementById('freeTotal');
       const m = el.textContent.match(/([\d,.]+)$/);
@@ -252,7 +250,7 @@
       el.textContent='פנוי למימוש: ₪ ' + next.toFixed(2);
     }
 
-    // —— מימוש שובר: עדכון נקודתי —— //
+    // —— מימוש שובר: עדכון נקודתי בלבד —— //
     async function handleRedeem(couponId){
       if(!currentCustomer || !sb) return;
       const tr=document.querySelector(`tr[data-rowid="${couponId}"]`);
@@ -265,7 +263,7 @@
       }).eq('id', couponId).limit(1);
       if(error){ alert('שגיאה במימוש'); return; }
 
-      // DOM: עדכון מיידי
+      // עדכון מקומי
       tr.querySelector('.col-redeemed').textContent = new Date().toLocaleString('he-IL');
       const act=tr.querySelector('.actions');
       act.innerHTML = `<button type="button" class="small ghost" data-action="unredeem" data-id="${couponId}">בטל מימוש</button>`;
@@ -273,7 +271,7 @@
       adjustFreeTotal(-amount);
     }
 
-    // —— ביטול מימוש: עדכון נקודתי + שם מאשר —— //
+    // —— ביטול מימוש: עדכון נקודתי בלבד (עם שם מאשר) —— //
     async function handleUnredeem(couponId){
       if(!currentCustomer || !sb) return;
       const approver=prompt('שם המאשר ביטול מימוש (חובה):');
@@ -289,7 +287,7 @@
       }).eq('id', couponId).limit(1);
       if(error){ alert('שגיאה בביטול'); return; }
 
-      // DOM: עדכון מיידי
+      // עדכון מקומי
       tr.querySelector('.col-redeemed').textContent = '—';
       const act=tr.querySelector('.actions');
       act.innerHTML = `<button type="button" class="small" data-action="redeem" data-id="${couponId}">מימוש</button>`;
