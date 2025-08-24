@@ -4,8 +4,8 @@ name: Goodi Daily Import
 on:
   workflow_dispatch: {}
   schedule:
-    - cron: "0 11 * * *"
-    - cron: "0 20 * * *"
+    - cron: "0 09 * * *"
+    - cron: "0 12 * * *"
 
 concurrency:
   group: goodi-daily-import
