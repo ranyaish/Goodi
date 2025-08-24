@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>גודי שוברים — מערכת ניהול</title>
 
-  <!-- Supabase bootstrap -->
+  <!-- Supabase bootstrap (נשען על supabaseClient.js שיש לך בריפו) -->
   <script src="./supabaseClient.js"></script>
 
   <style>
@@ -24,8 +24,6 @@
     .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
     .spacer{flex:1}
     .pill{font-size:12px;background:var(--pill);border:1px solid var(--border);border-radius:999px;padding:3px 8px}
-    .list{list-style:none;padding:0;margin:10px 0 0}
-    .list li{padding:6px 0;border-bottom:1px dashed var(--border)}
     table{width:100%;border-collapse:collapse}
     th,td{padding:10px;border-bottom:1px solid var(--border);text-align:right;font-size:15px}
     thead th{background:#f8fafc}
@@ -57,7 +55,7 @@
     </div>
   </header>
 
-  <!-- פס קטן: ריצה אחרונה מגיטהאב (קומפקטי) -->
+  <!-- פס קומפקטי: ריצה אחרונה מגיטהאב (מקור אחד מספיק) -->
   <div id="wf-mini" style="direction:rtl;max-width:920px;margin:16px auto 0;font-family:system-ui">
     <div style="font-size:13px;color:#6b7280;margin-bottom:6px">עדכון אחרון</div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid #e5e7eb;border-radius:10px;padding:8px 10px">
@@ -104,19 +102,6 @@
       </form>
     </div>
 
-    <!-- לוג עדכונים אחרונים (DB) -->
-    <div class="card">
-      <div class="row">
-        <strong>לוג עדכונים אחרונים</strong>
-        <span id="logMeta" class="pill">—</span>
-        <div class="spacer"></div>
-        <button id="refreshLog" class="ghost">רענן</button>
-      </div>
-      <ul id="logList" class="list">
-        <li class="muted">טוען…</li>
-      </ul>
-    </div>
-
     <!-- בחירת לקוח -->
     <div class="card">
       <div class="row" style="margin-bottom:10px">
@@ -132,8 +117,10 @@
     <div id="customerCoupons" class="card" style="display:none">
       <div class="row">
         <strong>שוברים</strong>
-        <div class="spacer"></div>
         <span id="couponMeta" class="pill">—</span>
+        <div class="spacer"></div>
+        <strong class="muted">פנוי למימוש:</strong>
+        <span id="freeTotal" class="pill">₪ 0.00</span>
       </div>
       <div id="couponTable" style="margin-top:8px"></div>
     </div>
@@ -171,24 +158,9 @@
   })();
 
   (async function(){
-    // מחכים לקליינט
     const ready = await window.supabaseReady;
     if(!ready || !ready.ok){ console.error('Supabase not ready'); return; }
     const sb = ready.client;
-
-    // === לוג ריצות ===
-    async function loadImportLogs(){
-      const $list=document.getElementById('logList');
-      const $meta=document.getElementById('logMeta');
-      $list.innerHTML='<li class="muted">טוען…</li>';
-      const { data, error } = await sb.from('import_logs').select('*').order('run_time',{ascending:false}).limit(5);
-      if(error){ $list.innerHTML='<li class="muted">שגיאה בטעינת לוגים</li>'; $meta.textContent='שגיאה'; return; }
-      if(!data?.length){ $list.innerHTML='<li class="muted">אין ריצות קודמות</li>'; $meta.textContent='0'; return; }
-      $list.innerHTML=''; data.forEach(r=>{ const li=document.createElement('li'); const dt=new Date(r.run_time).toLocaleString('he-IL'); li.textContent=`${dt} — ${r.records_imported} רשומות (${r.status})`; $list.appendChild(li); });
-      $meta.textContent=`סה״כ: ${data.length}`;
-    }
-    document.getElementById('refreshLog').onclick=loadImportLogs;
-    loadImportLogs();
 
     // === בחירת לקוח – מודל עם חיפוש/אוטוקומפליט ===
     const modal = document.getElementById('custModal');
@@ -208,7 +180,7 @@
     btnPick.addEventListener('click', async ()=>{
       if(document.documentElement.dataset.goodiAuthed!=='1'){ alert('יש להתחבר'); return; }
       if(customersCache.length===0){
-        const { data, error } = await sb.from('customers').select('customer_id,name').order('name',{ascending:true}).limit(500);
+        const { data, error } = await sb.from('customers').select('customer_id,name').order('name',{ascending:true}).limit(1000);
         if(error){ alert('שגיאה בטעינת לקוחות'); return; }
         customersCache = data || [];
       }
@@ -229,7 +201,7 @@
       loadCustomer(picked);
     });
 
-    // === טעינת לקוח ושוברים + כפתורי פעולה ===
+    // === טעינת לקוח ושוברים + פעולות ===
     async function loadCustomer(cust){
       document.getElementById('currentCustomer').value = cust.name || '(ללא שם)';
       document.getElementById('customerSummary').textContent = `מזהה: ${cust.customer_id ?? '-'}`;
@@ -237,6 +209,7 @@
       const $wrap=document.getElementById('customerCoupons');
       const $tbl =document.getElementById('couponTable');
       const $meta=document.getElementById('couponMeta');
+      const $free=document.getElementById('freeTotal');
 
       $tbl.innerHTML = '<div class="muted">טוען…</div>';
       $wrap.style.display='block';
@@ -247,8 +220,12 @@
         .eq('customer_id', cust.customer_id)
         .order('date',{ascending:false});
 
-      if(error){ $tbl.innerHTML='<div class="muted">שגיאה בטעינת שוברים</div>'; $meta.textContent='שגיאה'; return; }
-      if(!coupons?.length){ $tbl.innerHTML='<div class="muted">אין שוברים ללקוח</div>'; $meta.textContent='0'; return; }
+      if(error){ $tbl.innerHTML='<div class="muted">שגיאה בטעינת שוברים</div>'; $meta.textContent='שגיאה'; $free.textContent='₪ 0.00'; return; }
+      if(!coupons?.length){ $tbl.innerHTML='<div class="muted">אין שוברים ללקוח</div>'; $meta.textContent='0'; $free.textContent='₪ 0.00'; return; }
+
+      // סכום כולל פנוי למימוש
+      const freeSum = coupons.filter(c=>!c.redeemed).reduce((s,c)=>s+Number(c.amount||0),0);
+      $free.textContent = '₪ ' + freeSum.toFixed(2);
 
       $meta.textContent=String(coupons.length);
       const rows = coupons.map(c=>{
@@ -283,26 +260,26 @@
       });
     }
 
+    // מימוש – בלי אישור, קובע redeemed_at עכשיו
     async function handleRedeem(couponId, cust){
-      if(!confirm('לסמן את השובר כמומש?')) return;
       const { error } = await sb.from('coupons').update({
         redeemed: true,
         redeemed_at: new Date().toISOString()
       }).eq('id', couponId).limit(1);
       if(error){ alert('שגיאה במימוש'); return; }
-      // רענון רשימת השוברים ללקוח
       loadCustomer(cust);
     }
 
+    // ביטול מימוש – דורש שם מאשר
     async function handleUnredeem(couponId, cust){
       const approver = prompt('שם המאשר ביטול מימוש (חובה):');
       if(!approver || !approver.trim()){ alert('נדרש שם מאשר'); return; }
-      // הערה: כרגע איננו שומרים את שם המאשר בבסיס. אם תרצה לשמר אותו — תגיד לי ונוסיף עמודת audit.
       const { error } = await sb.from('coupons').update({
         redeemed: false,
         redeemed_at: null
       }).eq('id', couponId).limit(1);
       if(error){ alert('שגיאה בביטול מימוש'); return; }
+      // (אם תרצה לשמור את שם המאשר — נוסיף טבלת audit/עמודה ונכתוב לשם)
       loadCustomer(cust);
     }
 
