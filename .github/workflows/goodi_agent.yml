@@ -28,7 +28,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
+          
+- name: Inspect workspace
+  run: |
+    node -v
+    pwd
+    ls -la
+    echo "---- goodi_agent_dl ----"
+    ls -la goodi_agent_dl || true
+    echo "---- package.json ----"
+    cat goodi_agent_dl/package.json || true
       - name: Debug tree
         run: |
           pwd
@@ -70,9 +79,23 @@ jobs:
           fi
           echo "Using entry: $(cat $GITHUB_OUTPUT)"
 
-      - name: Scrape Goodi (today) -> report.html
+      - name: Run agent (scrape) – verbose
         working-directory: goodi_agent_dl
-        run: node ${{ steps.detect.outputs.entry }}
+        env:
+          NODE_DEBUG: module
+        run: |
+          set -e
+          echo "Running: ${{ steps.detect.outputs.entry }}"
+          node --trace-uncaught --unhandled-rejections=strict "${{ steps.detect.outputs.entry }}"
+
+      # אופציונלי: העלאת הדוח אם נוצר
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: goodi-report
+          path: goodi_agent_dl/report.html
+          if-no-files-found: warn
 
       - name: Done
         run: echo "OK"
