@@ -20,8 +20,11 @@ jobs:
       SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - name: Checkout repo branch goodi
+  uses: actions/checkout@v4
+  with:
+    ref: goodi
+    fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
