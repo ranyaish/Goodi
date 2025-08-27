@@ -1,22 +1,29 @@
 import fs from 'node:fs/promises';
-import cheerio from 'cheerio';
+import { load } from 'cheerio';              // ⬅︎ בלי default
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL  = process.env.SUPABASE_URL;
-const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_KEY;
+// מקבלים גם את שמות ה-ENV מה־YAML שלך וגם את השמות המקוריים
+const SUPABASE_URL =
+  process.env.SUPABASE_URL || process.env.SB_URL;
+const SUPABASE_KEY =
+  process.env.SUPABASE_SERVICE_KEY || process.env.SB_SERVICE_KEY;
+
 if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error('Missing SUPABASE_URL / SUPABASE_SERVICE_KEY env vars');
+  console.error('Missing SUPABASE_URL/SB_URL or SUPABASE_SERVICE_KEY/SB_SERVICE_KEY env vars');
   process.exit(1);
 }
+
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // עוזרים
-const cleanAmount = s => Number(String(s||'').replace(/[^\d.,]/g,'').replace(',', '.'));
+const cleanAmount = s =>
+  Number(String(s || '').replace(/[^\d.,]/g, '').replace(',', '.'));
+
 const toIsoDate = (s) => {
   // "25/08/2025 13:48:32" או "25.08.2025 13:48:32"
   const m = /(\d{2})[./](\d{2})[./](\d{4})/.exec(s);
   if (!m) return null;
-  const [_, dd, mm, yyyy] = m;
+  const [, dd, mm, yyyy] = m;
   return `${yyyy}-${mm}-${dd}`;
 };
 
@@ -40,13 +47,13 @@ async function ensureCustomerByName(name) {
 
 export default async function parseAndInsert(htmlPath) {
   const html = await fs.readFile(htmlPath, 'utf8');
-  const $ = cheerio.load(html);
+  const $ = load(html);                       // ⬅︎ שימוש נכון ב-cheerio
 
   const rows = $('#ICReports tr');
   if (!rows || rows.length <= 2) {
     console.log('No data rows found in report');
     return 0;
-    }
+  }
 
   const dataRows = rows.slice(1, -1); // ללא כותרת וללא סיכום
   const upserts = [];
@@ -77,7 +84,7 @@ export default async function parseAndInsert(htmlPath) {
       redeemed: false,
       redeemed_at: null,
       order_id: r.orderId,
-      source: 'goodi_html_agent'
+      source: 'goodi_html_agent',
     });
   }
 
