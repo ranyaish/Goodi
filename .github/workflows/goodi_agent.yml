@@ -3,8 +3,7 @@ name: Goodi Agent (daily scrape + import)
 on:
   workflow_dispatch: {}
   schedule:
-    # זמנים ב-UTC! 09:05 ו-12:05 בישראל ≈ 06:05 ו-09:05 UTC (בקיץ)
-    - cron: "5 6,9 * * *"
+    - cron: "5 6,9 * * *"  # UTC
 
 jobs:
   run:
@@ -13,7 +12,6 @@ jobs:
     env:
       TZ: Asia/Jerusalem
       NODE_OPTIONS: --experimental-modules
-      # סודות
       GOODI_USER: ${{ secrets.GOODI_USER }}
       GOODI_PASS: ${{ secrets.GOODI_PASS }}
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -28,19 +26,13 @@ jobs:
         with:
           node-version: 20
 
-      # <<< שלב הדיבאג בנפרד ובעומק ההזחה של "steps"
       - name: Debug tree
         run: |
           pwd
           git rev-parse --abbrev-ref HEAD
           ls -la
-          echo "----"
-          ls -la goodi_agent || true
-          ls -la goodi_agent_dl || true
 
-      # עדכן את ה-working-directory אחרי שתראה בדיבאג איזו תיקייה קיימת
       - name: Install deps
-        working-directory: goodi_agent_dl
         run: |
           if [ -f package-lock.json ]; then
             npm ci
@@ -48,9 +40,23 @@ jobs:
             npm install
           fi
 
+      - name: Detect entry file
+        id: detect
+        run: |
+          if [ -f scrape_and_import.mjs ]; then
+            echo "entry=scrape_and_import.mjs" >> "$GITHUB_OUTPUT"
+          elif [ -f scrape-goddi.js ]; then
+            echo "entry=scrape-goddi.js" >> "$GITHUB_OUTPUT"
+          elif [ -f scrape_goodi.js ]; then
+            echo "entry=scrape_goodi.js" >> "$GITHUB_OUTPUT"
+          else
+            echo "❌ לא נמצא קובץ כניסה. קיים: "; ls -la
+            exit 1
+          fi
+          echo "Using entry: $(cat $GITHUB_OUTPUT)"
+
       - name: Scrape Goodi (today) -> report.html
-        working-directory: goodi_agent_dl
-        run: node scrape_and_import.mjs
+        run: node ${{ steps.detect.outputs.entry }}
 
       - name: Done
         run: echo "OK"
