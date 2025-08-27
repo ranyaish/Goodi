@@ -16,11 +16,10 @@ jobs:
       GOODI_PASS: ${{ secrets.GOODI_PASS }}
       SB_URL: ${{ secrets.SB_URL }}
       SB_SERVICE_KEY: ${{ secrets.SB_SERVICE_KEY }}
-      GOODI_URL: ${{ secrets.GOODI_URL }} # אם קיים אצלך
+      GOODI_URL: ${{ secrets.GOODI_URL }} # optinal
 
     steps:
-      - name: Checkout repo (branch: goodi)
-        uses: actions/checkout@v4
+      GOODI_URL: ${{ secrets.GOODI_URL }} # optional
         with:
           ref: goodi
           fetch-depth: 0
