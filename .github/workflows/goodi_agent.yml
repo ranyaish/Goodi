@@ -29,7 +29,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          
+
       - name: Inspect workspace
         run: |
           pwd
@@ -59,14 +59,19 @@ jobs:
 
       - name: Run agent (scrape)
         working-directory: goodi_agent_dl
+        env:
+          NODE_DEBUG: module
         run: |
+          set -e
           if [ -f scrape_and_import.mjs ]; then
-            node scrape_and_import.mjs
+            ENTRY=scrape_and_import.mjs
           elif [ -f scrape-goddi.js ]; then
-            node scrape-goddi.js
+            ENTRY=scrape-goddi.js
           else
             echo "No entry file found"; ls -la; exit 1
           fi
+          echo "Running: $ENTRY"
+          node --trace-uncaught --unhandled-rejections=strict "$ENTRY"
 
       - name: Done
         run: echo "OK"
