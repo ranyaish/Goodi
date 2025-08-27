@@ -18,7 +18,7 @@ jobs:
       SB_SERVICE_KEY: ${{ secrets.SB_SERVICE_KEY }}
       GOODI_URL: ${{ secrets.GOODI_URL }} # optinal
 
-    steps:
+      steps:
       GOODI_URL: ${{ secrets.GOODI_URL }} # optional
         with:
           ref: goodi
