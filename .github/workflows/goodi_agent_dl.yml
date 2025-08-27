@@ -1,0 +1,40 @@
+name: Goodi Agent (daily scrape + import)
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    # זמנים ב-UTC! 09:05 ו-12:05 בישראל ≈ 06:05 ו-09:05 UTC (בקיץ)
+    - cron: "5 6,9 * * *"
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TZ: Asia/Jerusalem
+      NODE_OPTIONS: --experimental-modules
+      # סודות
+      GOODI_USER: ${{ secrets.GOODI_USER }}
+      GOODI_PASS: ${{ secrets.GOODI_PASS }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install deps
+        working-directory: Goodi/goodi_agent
+        run: npm ci
+
+      - name: Scrape Goodi (today) -> report.html
+        working-directory: Goodi/goodi_agent
+        run: node scrape_and_import.mjs
+
+      - name: Done
+        run: echo "OK"
