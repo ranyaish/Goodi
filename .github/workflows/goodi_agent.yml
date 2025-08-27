@@ -14,12 +14,16 @@ jobs:
       NODE_OPTIONS: --experimental-modules
       GOODI_USER: ${{ secrets.GOODI_USER }}
       GOODI_PASS: ${{ secrets.GOODI_PASS }}
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      SB_URL: ${{ secrets.SB_URL }}
+      SB_SERVICE_KEY: ${{ secrets.SB_SERVICE_KEY }}
+      GOODI_URL: ${{ secrets.GOODI_URL }} # אם קיים אצלך
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repo (branch: goodi)
         uses: actions/checkout@v4
+        with:
+          ref: goodi
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -31,8 +35,21 @@ jobs:
           pwd
           git rev-parse --abbrev-ref HEAD
           ls -la
+          echo "----"
+          ls -la goodi_agent_dl || true
+
+      - name: Verify required env names are present
+        run: |
+          for v in GOODI_USER GOODI_PASS SB_URL SB_SERVICE_KEY; do
+            if [ -z "${!v}" ]; then
+              echo "Missing $v"; exit 1
+            else
+              echo "OK: $v is set"
+            fi
+          done
 
       - name: Install deps
+        working-directory: goodi_agent_dl
         run: |
           if [ -f package-lock.json ]; then
             npm ci
@@ -42,20 +59,20 @@ jobs:
 
       - name: Detect entry file
         id: detect
+        working-directory: goodi_agent_dl
         run: |
           if [ -f scrape_and_import.mjs ]; then
             echo "entry=scrape_and_import.mjs" >> "$GITHUB_OUTPUT"
           elif [ -f scrape-goddi.js ]; then
             echo "entry=scrape-goddi.js" >> "$GITHUB_OUTPUT"
-          elif [ -f scrape_goodi.js ]; then
-            echo "entry=scrape_goodi.js" >> "$GITHUB_OUTPUT"
           else
-            echo "❌ לא נמצא קובץ כניסה. קיים: "; ls -la
+            echo "❌ לא נמצא קובץ כניסה ב-goodi_agent_dl"; ls -la
             exit 1
           fi
           echo "Using entry: $(cat $GITHUB_OUTPUT)"
 
       - name: Scrape Goodi (today) -> report.html
+        working-directory: goodi_agent_dl
         run: node ${{ steps.detect.outputs.entry }}
 
       - name: Done
