@@ -38,3 +38,11 @@ jobs:
 
       - name: Done
         run: echo "OK"
+        - name: Debug tree
+        run: |
+          pwd
+          git rev-parse --abbrev-ref HEAD
+          ls -la
+          echo "----"
+          ls -la goodi_agent || true
+          ls -la goodi_agent_dl || true
