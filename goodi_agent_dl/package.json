@@ -1,18 +1,14 @@
 {
-  "name": "goodi-agent-dl",
+  "name": "goodi-agent",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
+  "private": true,
   "scripts": {
-    "start": "node download.js",
-    "parse": "node parse-and-insert.js",
-    "run": "node download.js && node parse-and-insert.js",
-    "postinstall": "npx playwright install --with-deps chromium"
+    "start": "node scrape_and_import.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.45.4",
-    "dotenv": "^16.4.5",
-    "node-html-parser": "^6.1.11",
+    "@supabase/supabase-js": "^2.46.0",
+    "cheerio": "^1.0.0",
     "playwright": "^1.47.2"
   }
 }
