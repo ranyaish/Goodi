@@ -26,18 +26,10 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: 20
 
-      - name: Install deps
-        working-directory: goodi_agent_dl
-        run: npm ci
-
-      - name: Scrape Goodi (today) -> report.html
-        working-directory: goodi_agent_dl
-        run: node scrape_and_import.mjs
-      - name: Done
-        run: echo "OK"
-        - name: Debug tree
+      # <<< שלב הדיבאג בנפרד ובעומק ההזחה של "steps"
+      - name: Debug tree
         run: |
           pwd
           git rev-parse --abbrev-ref HEAD
@@ -45,3 +37,20 @@ jobs:
           echo "----"
           ls -la goodi_agent || true
           ls -la goodi_agent_dl || true
+
+      # עדכן את ה-working-directory אחרי שתראה בדיבאג איזו תיקייה קיימת
+      - name: Install deps
+        working-directory: goodi_agent_dl
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Scrape Goodi (today) -> report.html
+        working-directory: goodi_agent_dl
+        run: node scrape_and_import.mjs
+
+      - name: Done
+        run: echo "OK"
