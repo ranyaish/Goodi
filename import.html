@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>ייבוא שוברים (אחרי התחברות) — HTML/XLS → Supabase</title>
+<title>ייבוא שוברים (אחרי התחברות) — HTML/XLS/XLSX → Supabase</title>
 
-<!-- Supabase (עם fallback) -->
+<!-- Supabase (עם fallback לכמה CDNs) -->
 <script>
 (function loadSupabase(){
   const urls=[
@@ -22,13 +22,11 @@
 })();
 </script>
 
-<!-- SheetJS לקריאת XLS/XLSX מקומי (שמור קובץ זה ליד ה-HTML) -->
+<!-- SheetJS לקריאת XLS/XLSX (קובץ מקומי ליד ה-HTML) -->
 <script src="xlsx.full.min.js"></script>
 
 <style>
-:root{
-  --bg:#fff; --card:#fff; --line:#e5e7eb; --muted:#64748b; --ink:#0f172a; --blue:#0ea5e9; --red:#dc2626; --green:#16a34a;
-}
+:root{ --bg:#fff; --card:#fff; --line:#e5e7eb; --muted:#64748b; --ink:#0f172a; --blue:#0ea5e9; --red:#dc2626; --green:#16a34a; }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,Heebo,Arial}
 header{position:sticky;top:0;background:#ffffffcc;backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 16px}
@@ -52,22 +50,18 @@ thead th{position:sticky;top:64px;background:#fff}
 
 <div class="container">
 
-  <!-- הגדרות פרויקט + התחברות -->
+  <!-- התחברות -->
   <div class="card">
+    <label>כניסה עם משתמש</label>
     <div class="row">
-      <div class="col"><label>Supabase URL</label><input id="sbUrl" placeholder="https://xxxx.supabase.co"/></div>
-      <div class="col"><label>Supabase anon key</label><input id="sbKey" placeholder="eyJ..."/></div>
-    </div>
-
-    <div class="row" style="margin-top:10px">
-      <div class="col"><label>אימייל</label><input id="email" autocomplete="username"/></div>
-      <div class="col"><label>סיסמה</label><input id="password" type="password" autocomplete="current-password"/></div>
+      <div class="col"><input id="email" placeholder="אימייל" autocomplete="username"/></div>
+      <div class="col"><input id="password" type="password" placeholder="סיסמה" autocomplete="current-password"/></div>
       <div class="col" style="flex:0 0 180px;align-self:end">
         <button id="loginBtn" class="primary" style="width:100%">כניסה</button>
         <button id="logoutBtn" class="hidden" style="width:100%;margin-top:8px">יציאה</button>
       </div>
     </div>
-    <div id="authMsg" class="muted" style="margin-top:8px"></div>
+    <div id="authMsg" class="muted" style="margin-top:8px">לא מחובר</div>
   </div>
 
   <!-- אזור עבודה – מוצג רק לאחר התחברות -->
@@ -90,7 +84,7 @@ thead th{position:sticky;top:64px;background:#fff}
     <!-- סיכומים מה-DB (רשות) -->
     <div class="card">
       <div class="row" style="align-items:end">
-        <div class="col"><label>חפש לקוח</label><input id="balSearch" placeholder="הקלד שם לקוח…"/></div>
+        <div class="col"><input id="balSearch" placeholder="חפש לקוח…"/></div>
         <div class="col" style="flex:0 0 180px"><button id="btnRefresh" class="primary">רענן סיכומים</button></div>
       </div>
       <div id="balances" style="margin-top:10px"></div>
@@ -100,89 +94,79 @@ thead th{position:sticky;top:64px;background:#fff}
 </div>
 
 <script>
+/* ===== קונפיג קבוע של Supabase ===== */
+const SUPABASE_URL  = "https://ylqpxwgchwalcblfipsu.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlscXB4d2djaHdhbGNibGZpcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU4MTk3MzQsImV4cCI6MjA3MTM5NTczNH0.bHNNmDlvUj-K1KFYZ1eNSKdzB_EpLmf2KiRhYTrWVPM";
+
+let supabase=null, currentUser=null, balancesCache=[];
+
+document.addEventListener('supabase-ready', boot);
+
+function ensureClient(){
+  if(!window.supabase){ document.getElementById('authMsg').textContent='ספריית Supabase לא נטענה'; document.getElementById('authMsg').className='bad'; return null; }
+  if(!supabase){
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+      auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true }
+    });
+  }
+  return supabase;
+}
+function setAuthUI(on,email){
+  const msg=document.getElementById('authMsg');
+  msg.textContent = on ? `מחובר כ-${email||''}` : 'לא מחובר';
+  msg.className   = on ? 'ok' : 'muted';
+  document.getElementById('logoutBtn').classList.toggle('hidden', !on);
+  document.getElementById('loginBtn').classList.toggle('hidden',  on);
+  document.getElementById('app').classList.toggle('hidden', !on);
+}
+
+async function boot(){
+  if(!ensureClient()) return;
+
+  document.getElementById('loginBtn').onclick = async ()=>{
+    try{
+      const email=document.getElementById('email').value.trim();
+      const password=document.getElementById('password').value;
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if(error) throw error;
+      const { data:{ user } } = await supabase.auth.getUser();
+      currentUser=user||null;
+      setAuthUI(!!currentUser, currentUser?.email);
+      if(currentUser) refreshBalances();
+    }catch(e){
+      document.getElementById('authMsg').textContent='שגיאה: '+(e.message||e); document.getElementById('authMsg').className='bad';
+    }
+  };
+
+  document.getElementById('logoutBtn').onclick = async ()=>{
+    try{ await supabase.auth.signOut(); }catch(_){}
+    currentUser=null; setAuthUI(false);
+  };
+
+  // אם כבר יש session
+  const { data:{ session } } = await supabase.auth.getSession();
+  if(session?.user){ currentUser=session.user; setAuthUI(true, currentUser.email); refreshBalances(); }
+  supabase.auth.onAuthStateChange((_e,sess)=>{
+    if(sess?.user){ currentUser=sess.user; setAuthUI(true, currentUser.email); }
+    else { currentUser=null; setAuthUI(false); }
+  });
+}
+
 /* ===== Utils ===== */
 const $ = s => document.querySelector(s);
 const clean = t => (t||'').replace(/[\u200e\u200f]/g,'').replace(/\s+/g,' ').trim();
-function parseAmount(s){
-  if(!s) return 0;
-  s = String(s).replace(/[₪,\s]/g,'').replace(/[^0-9.\-]/g,'');
-  const n = parseFloat(s); return isNaN(n) ? 0 : n;
-}
+function parseAmount(s){ if(!s) return 0; s=String(s).replace(/[₪,\s]/g,'').replace(/[^0-9.\-]/g,''); const n=parseFloat(s); return isNaN(n)?0:n; }
 function normDateToISO(s){
   if(!s) return '';
   s=s.replace(/[\.]/g,'/').replace(/\s+/g,' ').trim();
-  let m=s.match(/(\d{1,2})[\/](\d{1,2})[\/](\d{2,4})/); // dd/mm/yyyy
-  if(m){let[d,mn,y]=[m[1],m[2],m[3]]; if(y.length===2) y='20'+y; return `${y.padStart(2,'0')}-${mn.padStart(2,'0')}-${d.padStart(2,'0')}`;}
-  m=s.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);     // yyyy-mm-dd
+  let m=s.match(/(\d{1,2})[\/](\d{1,2})[\/](\d{2,4})/);
+  if(m){let[d,mn,y]=[m[1],m[2],m[3]]; if(y.length===2) y='20'+y; return `${y.padStart(4,'0')}-${mn.padStart(2,'0')}-${d.padStart(2,'0')}`;}
+  m=s.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
   if(m){let[y,mn,d]=[m[1],m[2],m[3]]; return `${y.padStart(4,'0')}-${mn.padStart(2,'0')}-${d.padStart(2,'0')}`;}
   return s;
 }
 const isoToDDMMYYYY = iso => (!iso?'':(iso.split('-')[2]+'/'+iso.split('-')[1]+'/'+iso.split('-')[0]));
 const fmtILS = n => new Intl.NumberFormat('he-IL',{style:'currency',currency:'ILS'}).format(Number(n||0));
-
-/* ===== Supabase ===== */
-let supabase=null, currentUser=null, balancesCache=[];
-document.addEventListener('supabase-ready', boot);
-
-function saveConfig(){
-  localStorage.setItem('sb_url', $('#sbUrl').value.trim());
-  localStorage.setItem('sb_key', $('#sbKey').value.trim());
-}
-function loadConfig(){
-  $('#sbUrl').value = localStorage.getItem('sb_url') || '';
-  $('#sbKey').value = localStorage.getItem('sb_key') || '';
-}
-function setAuthUI(on,email){
-  $('#authMsg').textContent = on ? `מחובר כ-${email||''}` : 'לא מחובר';
-  $('#authMsg').className = on ? 'ok' : 'muted';
-  $('#logoutBtn').classList.toggle('hidden', !on);
-  $('#loginBtn').classList.toggle('hidden',  on);
-  $('#app').classList.toggle('hidden', !on);
-}
-
-async function boot(){
-  loadConfig();
-  if(!window.supabase){ $('#authMsg').textContent='ספריית Supabase לא נטענה'; $('#authMsg').className='bad'; return; }
-
-  const ensureClient = ()=>{
-    const url=$('#sbUrl').value.trim(), key=$('#sbKey').value.trim();
-    if(!url || !key){ $('#authMsg').textContent='הזן URL ו-anon key'; $('#authMsg').className='bad'; return null; }
-    supabase = window.supabase.createClient(url, key, { auth:{persistSession:true, autoRefreshToken:true, detectSessionInUrl:true} });
-    saveConfig();
-    return supabase;
-  };
-
-  $('#loginBtn').onclick = async ()=>{
-    try{
-      if(!ensureClient()) return;
-      $('#authMsg').textContent='מתחבר…'; $('#authMsg').className='muted';
-      const email=$('#email').value.trim(), password=$('#password').value;
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if(error) throw error;
-      const { data:{ user } } = await supabase.auth.getUser();
-      currentUser = user||null;
-      setAuthUI(!!currentUser, currentUser?.email);
-      if(currentUser) refreshBalances();
-    }catch(e){
-      $('#authMsg').textContent = 'שגיאה: '+(e.message||e); $('#authMsg').className='bad';
-    }
-  };
-
-  $('#logoutBtn').onclick = async ()=>{
-    try{ await supabase.auth.signOut(); }catch(_){}
-    currentUser=null; setAuthUI(false);
-  };
-
-  // אם כבר מחובר (session קיים)
-  if(ensureClient()){
-    const { data:{ session } } = await supabase.auth.getSession();
-    if(session?.user){ currentUser=session.user; setAuthUI(true, currentUser.email); refreshBalances(); }
-    supabase.auth.onAuthStateChange((_e,sess)=>{
-      if(sess?.user){ currentUser=sess.user; setAuthUI(true, currentUser.email); }
-      else { currentUser=null; setAuthUI(false); }
-    });
-  }
-}
 
 /* ===== קריאת קובץ (HTML/XLS/XLSX) ===== */
 let pickedRows=[]; // {date,name,amount}
@@ -255,20 +239,18 @@ async function parseAsExcel(file){
 }
 
 async function readFile(){
-  const f=$('#fileInput').files?.[0]; if(!f) return null;
+  const f=document.getElementById('fileInput').files?.[0]; if(!f) return null;
   const ext=(f.name.split('.').pop()||'').toLowerCase();
   if(['xls','xlsx'].includes(ext)) return await parseAsExcel(f);
-  // ברירת מחדל: HTML
   return await parseAsHTML(f);
 }
 
 /* ===== תצוגה מקדימה ===== */
-$('#btnPreview').onclick = async ()=>{
-  if(!currentUser){ $('#importStatus').textContent='יש להתחבר קודם'; $('#importStatus').className='bad'; return; }
+document.getElementById('btnPreview').onclick = async ()=>{
+  if(!currentUser){ document.getElementById('importStatus').textContent='יש להתחבר קודם'; document.getElementById('importStatus').className='bad'; return; }
   const info = await readFile();
-  if(!info){ $('#importStatus').textContent='קובץ/טבלה לא תקינים'; $('#importStatus').className='bad'; return; }
+  if(!info){ document.getElementById('importStatus').textContent='קובץ/טבלה לא תקינים'; document.getElementById('importStatus').className='bad'; return; }
 
-  // איחוד כפילויות (שם+תאריך)
   const map=new Map();
   for(const r of pickedRows){
     const k=`${r.name}|${r.date}`;
@@ -280,17 +262,17 @@ $('#btnPreview').onclick = async ()=>{
   html+='<div style="max-height:340px;overflow:auto"><table><thead><tr><th>תאריך</th><th>שם עובד</th><th>תשלום</th></tr></thead><tbody>';
   sample.forEach(r=> html+=`<tr><td>${isoToDDMMYYYY(r.date)}</td><td>${r.name}</td><td>${fmtILS(r.amount)}</td></tr>`);
   html+='</tbody></table></div>';
-  $('#preview').innerHTML=html;
-  $('#importStatus').textContent='';
+  document.getElementById('preview').innerHTML=html;
+  document.getElementById('importStatus').textContent='';
 };
 
 /* ===== ייבוא ל-DB ===== */
-$('#btnImport').onclick = async ()=>{
+document.getElementById('btnImport').onclick = async ()=>{
   try{
-    if(!currentUser){ $('#importStatus').textContent='יש להתחבר קודם'; $('#importStatus').className='bad'; return; }
+    if(!currentUser){ document.getElementById('importStatus').textContent='יש להתחבר קודם'; document.getElementById('importStatus').className='bad'; return; }
     const info = await readFile();
-    if(!info){ $('#importStatus').textContent='קובץ/טבלה לא תקינים'; $('#importStatus').className='bad'; return; }
-    $('#importStatus').textContent='מייבא…'; $('#importStatus').className='muted';
+    if(!info){ document.getElementById('importStatus').textContent='קובץ/טבלה לא תקינים'; document.getElementById('importStatus').className='bad'; return; }
+    document.getElementById('importStatus').textContent='מייבא…'; document.getElementById('importStatus').className='muted';
 
     // איחוד כפילויות (שם+תאריך)
     const uniq=new Map();
@@ -299,9 +281,9 @@ $('#btnImport').onclick = async ()=>{
       if(!uniq.has(k)) uniq.set(k,{...r}); else uniq.get(k).amount+=Number(r.amount||0);
     }
     const rowsForImport=[...uniq.values()];
-    if(!rowsForImport.length){ $('#importStatus').textContent='אין רשומות חוקיות לייבוא'; $('#importStatus').className='bad'; return; }
+    if(!rowsForImport.length){ document.getElementById('importStatus').textContent='אין רשומות חוקיות לייבוא'; document.getElementById('importStatus').className='bad'; return; }
 
-    // upsert לקוחות לפי name (ללא עדכון שורות קיימות)
+    // upsert לקוחות (ללא עדכון קיימות)
     const uniqueNames = [...new Set(rowsForImport.map(x=>x.name))];
     const { error:cErr } = await supabase.from('customers').upsert(
       uniqueNames.map(n=>({ name:n })),
@@ -331,10 +313,12 @@ $('#btnImport').onclick = async ()=>{
       if(uErr) throw uErr;
     }
 
-    $('#importStatus').textContent=`הייבוא הושלם. נרשמו/דלגו ${coupons.length} רשומות.`; $('#importStatus').className='ok';
+    document.getElementById('importStatus').textContent=`הייבוא הושלם. נרשמו/דלגו ${coupons.length} רשומות.`; 
+    document.getElementById('importStatus').className='ok';
     refreshBalances();
   }catch(e){
-    $('#importStatus').textContent='שגיאה: '+(e.message||e); $('#importStatus').className='bad';
+    document.getElementById('importStatus').textContent='שגיאה: '+(e.message||e);
+    document.getElementById('importStatus').className='bad';
   }
 };
 
@@ -346,7 +330,7 @@ async function refreshBalances(){
     balancesCache=data||[];
     renderBalances(balancesCache);
   }catch(e){
-    $('#balances').innerHTML='<span class="bad">שגיאה: '+(e.message||e)+'</span>';
+    document.getElementById('balances').innerHTML='<span class="bad">שגיאה: '+(e.message||e)+'</span>';
   }
 }
 function renderBalances(list){
@@ -355,11 +339,11 @@ function renderBalances(list){
     html+=`<tr><td>${r.name}</td><td>${fmtILS(r.total_loaded)}</td><td>${fmtILS(r.total_redeemed)}</td><td><b>${fmtILS(r.available_amount)}</b></td></tr>`;
   });
   html+='</tbody></table>';
-  $('#balances').innerHTML=html;
+  document.getElementById('balances').innerHTML=html;
 }
-$('#btnRefresh').addEventListener('click', refreshBalances);
-$('#balSearch').addEventListener('input', ()=>{
-  const q=$('#balSearch').value.toLowerCase().trim();
+document.getElementById('btnRefresh').addEventListener('click', refreshBalances);
+document.getElementById('balSearch').addEventListener('input', ()=>{
+  const q=document.getElementById('balSearch').value.toLowerCase().trim();
   const filtered = balancesCache.filter(r=> (r.name||'').toLowerCase().includes(q));
   renderBalances(filtered);
 });
