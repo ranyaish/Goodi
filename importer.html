@@ -22,6 +22,9 @@
 })();
 </script>
 
+<!-- NEW: SheetJS לקריאת קבצי אקסל -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js"></script>
+
 <style>
 :root{
   --bg:#ffffff; --card:#ffffff; --muted:#5b6b7a; --text:#0f172a;
@@ -59,10 +62,11 @@ thead th{position:sticky;top:64px;background:#fff}
     <div id="connStatus" class="hint">מחבר…</div>
   </div>
 
-  <!-- קובץ HTML -->
+  <!-- קובץ HTML/CSV/XLS -->
   <div class="card">
     <label>קובץ HTML עם טבלה (כותרות לדוגמה: תאריך | שם עובד | … | תשלום | …)</label>
-    <input id="fileInput" type="file" accept=".html,.htm,text/html"/>
+    <input id="fileInput" type="file"
+           
     <div style="margin-top:10px;display:flex;gap:10px">
       <button id="btnPreview">תצוגה מקדימה</button>
       <button id="btnImport" class="primary">ייבוא ל־DB</button>
@@ -131,22 +135,76 @@ document.addEventListener('supabase-ready', initSupabase);
 /* ===== קובץ + מיפוי אוטומטי ===== */
 let pickedRows=[];
 
+/* זיהוי HTML ועטיפת CSV לטבלת HTML */
+function isProbablyHTML(txt){
+  const s=(txt||'').trim().slice(0,400).toLowerCase();
+  return /<(html|table|thead|tbody|tr|td|th)\b/.test(s) || s.startsWith('<!doctype');
+}
+
+function parseCSV(text){
+  const rows=[]; let row=[], cur='', inQ=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i], next=text[i+1];
+    if(ch === '"'){
+      if(inQ && next === '"'){ cur+='"'; i++; }
+      else inQ = !inQ;
+    } else if(ch === ',' && !inQ){
+      row.push(cur); cur='';
+    } else if((ch === '\n' || ch === '\r') && !inQ){
+      if(ch === '\r' && next === '\n'){ i++; }
+      row.push(cur); rows.push(row); row=[]; cur='';
+    } else {
+      cur += ch;
+    }
+  }
+  row.push(cur); rows.push(row);
+  return rows.map(r=> r.map(c=> String(c??'').trim()));
+}
+
+function csvToHtmlTable(text){
+  const rows = parseCSV(text).filter(r=> r.some(c=> (c||'').trim() !== ''));
+  if(!rows.length) return '<table></table>';
+  const head = rows[0];
+  const body = rows.slice(1);
+  const esc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let html = '<table><thead><tr>';
+  head.forEach(h=> html += `<th>${esc(h)}</th>`);
+  html += '</tr></thead><tbody>';
+  body.forEach(r=>{
+    html += '<tr>' + r.map(c=> `<td>${esc(c)}</td>`).join('') + '</tr>';
+  });
+  html += '</tbody></table>';
+  return html;
+}
+
+/* NEW: המרה של קובץ לקלט HTML (תומך XLS/XLSX/CSV/HTML) */
+async function fileToHtml(f) {
+  const name = (f?.name || '').toLowerCase();
+  if (name.endsWith('.xls') || name.endsWith('.xlsx')) {
+    const ab = await f.arrayBuffer();
+    const wb = XLSX.read(ab, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]]; // גיליון ראשון
+    return XLSX.utils.sheet_to_html(ws, { header: '', footer: '' });
+  } else {
+    const raw = await f.text();
+    return isProbablyHTML(raw) ? raw : csvToHtmlTable(raw);
+  }
+}
+
 function findBestHeaderIndex(headers, wanted, {exclude=[]}={}){
   const H = headers.map(h => h.replace(/\s+/g,' ').trim().toLowerCase());
   const isBad = i => exclude.some(x => H[i].includes(x));
-  // 1) התאמה מדויקת
   for(let i=0;i<H.length;i++){ if(isBad(i)) continue; if(wanted.some(w=>H[i]===w)) return i; }
-  // 2) מתחיל ב-
   for(let i=0;i<H.length;i++){ if(isBad(i)) continue; if(wanted.some(w=>H[i].startsWith(w))) return i; }
-  // 3) מכיל
   for(let i=0;i<H.length;i++){ if(isBad(i)) continue; if(wanted.some(w=>H[i].includes(w))) return i; }
   return 0;
 }
 
 async function readFile(){
   const f = $('#fileInput').files?.[0]; if(!f) return null;
-  const html = await f.text();
+  const html = await fileToHtml(f); // ← תומך גם ב-.xls/.xlsx
   const doc  = new DOMParser().parseFromString(html,'text/html');
+
   const tables = Array.from(doc.querySelectorAll('table')).sort((a,b)=>b.rows.length-a.rows.length);
   const t = tables[0]; if(!t) return null;
 
@@ -156,11 +214,9 @@ async function readFile(){
   trs.shift();
   const rows = trs.map(tr=> Array.from(tr.children).map(td=> clean(td.textContent)));
 
-  // אינדקסים אוטומטיים:
   const idx = {
     date:  findBestHeaderIndex(headers, ['תאריך','date']),
     name:  findBestHeaderIndex(headers, ['שם עובד','שם לקוח','עובד','לקוח','customer','client','name']),
-    // amount: קודם כל "תשלום" — מדלג על "ללא"/"מע״מ", ואם אין — נופל ל"סה״כ"
     amount: (function(){
       let i = findBestHeaderIndex(
         headers,
@@ -188,7 +244,6 @@ $('#btnPreview').onclick = async ()=>{
   const info = await readFile();
   if(!info){ $('#importStatus').textContent='לא נמצאה טבלה בקובץ / כותרות לא מזוהות'; return; }
 
-  // איחוד כפילויות (שם+תאריך)
   const map = new Map();
   for(const r of pickedRows){
     const key = `${r.name}|${r.date}`;
@@ -212,7 +267,6 @@ $('#btnImport').onclick = async ()=>{
     const info = await readFile();
     if(!info){ $('#importStatus').innerHTML='<span class="bad">קובץ/טבלה לא תקינים</span>'; return; }
 
-    // 1) איחוד כפילויות (שם+תאריך)
     const uniqueMap = new Map();
     for (const row of pickedRows) {
       const key = `${row.name}|${row.date}`;
@@ -222,7 +276,6 @@ $('#btnImport').onclick = async ()=>{
     const rowsForImport = Array.from(uniqueMap.values());
     if(!rowsForImport.length){ $('#importStatus').innerHTML='<span class="bad">אין רשומות חוקיות לייבוא</span>'; return; }
 
-    // 2) upsert לקוחות לפי name
     const uniqueNames = Array.from(new Set(rowsForImport.map(x=>x.name)));
     const { error: cErr } = await supabase.from('customers').upsert(
       uniqueNames.map(n=>({name:n})),
@@ -230,18 +283,15 @@ $('#btnImport').onclick = async ()=>{
     );
     if(cErr){ $('#importStatus').innerHTML = '<span class="bad">שגיאה ביצירת לקוחות: '+cErr.message+'</span>'; return; }
 
-    // 3) name → customer_id
     const { data: cust, error: gErr } = await supabase.from('customers')
       .select('customer_id,name').in('name', uniqueNames);
     if(gErr){ $('#importStatus').innerHTML = '<span class="bad">שגיאה בקריאת לקוחות: '+gErr.message+'</span>'; return; }
     const idByName = Object.fromEntries((cust||[]).map(c=>[c.name, c.customer_id]));
 
-    // 4) בנה שוברים
     const coupons = rowsForImport
       .map(x=>({ customer_id: idByName[x.name], date: x.date, amount: x.amount, redeemed:false, source_label:'html-upload' }))
       .filter(x=>x.customer_id);
 
-    // 5) DO NOTHING על קונפליקט
     const CHUNK=500;
     for(let i=0;i<coupons.length;i+=CHUNK){
       const slice=coupons.slice(i,i+CHUNK);
