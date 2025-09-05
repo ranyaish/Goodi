@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>ייבוא שוברים מ־HTML → Supabase</title>
 
-<!-- supabase-js עם Fallback -->
+<!-- supabase-js עם Fallback ל-CDN (אפשר להשאיר) -->
 <script>
 (function loadSupabase(){
   const urls=[
@@ -22,24 +22,8 @@
 })();
 </script>
 
-<!-- SheetJS (XLSX) עם Fallback -->
-<script>
-(function loadXLSX(){
-  const urls = [
-    "https://cdn.jsdelivr.net/npm/xlsx@0.19.3/dist/xlsx.full.min.js",
-    "https://unpkg.com/xlsx@0.19.3/dist/xlsx.full.min.js",
-    "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.19.3/xlsx.full.min.js"
-  ];
-  (function go(i){
-    if (i >= urls.length) { document.dispatchEvent(new Event("xlsx-ready")); return; }
-    const s = document.createElement("script");
-    s.src = urls[i]; s.async = true;
-    s.onload = () => document.dispatchEvent(new Event("xlsx-ready"));
-    s.onerror = () => go(i+1);
-    document.head.appendChild(s);
-  })(0);
-})();
-</script>
+<!-- SheetJS (XLSX) נטען מקובץ מקומי לצד הקובץ הזה -->
+<script src="xlsx.full.min.js"></script>
 
 <style>
 :root{
@@ -78,7 +62,7 @@ thead th{position:sticky;top:64px;background:#fff}
     <div id="connStatus" class="hint">מחבר…</div>
   </div>
 
-  <!-- קובץ HTML/CSV/XLS -->
+  <!-- קובץ HTML/CSV/XLS/XLSX -->
   <div class="card">
     <label>קובץ HTML עם טבלה (כותרות לדוגמה: תאריך | שם עובד | … | תשלום | …)</label>
     <input id="fileInput" type="file"/>
@@ -115,7 +99,7 @@ function parseAmount(s){
 }
 function normDateToISO(s){
   if(!s) return '';
-  s=s.replace(/[\.]/g,'/').replace(/\s+/g,' ').trim();
+  s=s.replace(/[\.]/g,'/').replace(/\ס+/g,' ').trim();
   let m=s.match(/(\d{1,2})[\/](\d{1,2})[\/](\d{2,4})/); // dd/mm/yyyy
   if(m){let[d,mn,y]=[m[1],m[2],m[3]]; if(y.length===2) y='20'+y; return `${y.padStart(4,'0')}-${mn.padStart(2,'0')}-${d.padStart(2,'0')}`;}
   m=s.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);     // yyyy-mm-dd
@@ -147,16 +131,10 @@ document.addEventListener('supabase-ready', initSupabase);
   $('#sbKey').addEventListener(evt, initSupabase);
 });
 
-/* ===== המתנה בטוחה לטעינת XLSX ===== */
-const xlsxLoaded = new Promise((resolve) => {
-  if (typeof window.XLSX !== 'undefined') return resolve();
-  document.addEventListener('xlsx-ready', () => resolve(), { once: true });
-});
+/* ===== וידוא טעינת XLSX (מקומית) ===== */
 async function ensureXLSXReady(){
-  if (typeof window.XLSX !== 'undefined') return;
-  await xlsxLoaded;
   if (typeof window.XLSX === 'undefined') {
-    throw new Error('ספריית XLSX לא נטענה (נחסמה ע״י רשת/חוסם?)');
+    throw new Error('ספריית XLSX המקומית לא נטענה (בדוק את הקובץ xlsx.full.min.js והנתיב)');
   }
 }
 
