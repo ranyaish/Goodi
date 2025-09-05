@@ -62,7 +62,7 @@ thead th{position:sticky;top:64px;background:#fff}
   <!-- קובץ HTML -->
   <div class="card">
     <label>קובץ HTML עם טבלה (כותרות לדוגמה: תאריך | שם עובד | … | תשלום | …)</label>
-    <input id="fileInput" type="file" accept=".html,.htm,text/html"/>
+    <input id="fileInput" type="file" accept=".html,.htm,.csv,text/html,text/csv"/> <!-- NEW: הוספתי csv -->
     <div style="margin-top:10px;display:flex;gap:10px">
       <button id="btnPreview">תצוגה מקדימה</button>
       <button id="btnImport" class="primary">ייבוא ל־DB</button>
@@ -131,6 +131,51 @@ document.addEventListener('supabase-ready', initSupabase);
 /* ===== קובץ + מיפוי אוטומטי ===== */
 let pickedRows=[];
 
+/* NEW: זיהוי HTML ועטיפת CSV לטבלת HTML */
+function isProbablyHTML(txt){
+  const s=(txt||'').trim().slice(0,400).toLowerCase();
+  return /<(html|table|thead|tbody|tr|td|th)\b/.test(s) || s.startsWith('<!doctype');
+}
+
+function parseCSV(text){
+  // מפרק CSV בסיסי עם מרכאות — מספיק לטבלאות פשוטות
+  const rows=[]; let row=[], cur='', inQ=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i], next=text[i+1];
+    if(ch === '"'){
+      if(inQ && next === '"'){ cur+='"'; i++; }
+      else inQ = !inQ;
+    } else if(ch === ',' && !inQ){
+      row.push(cur); cur='';
+    } else if((ch === '\n' || ch === '\r') && !inQ){
+      if(ch === '\r' && next === '\n'){ i++; } // CRLF
+      row.push(cur); rows.push(row); row=[]; cur='';
+    } else {
+      cur += ch;
+    }
+  }
+  row.push(cur); rows.push(row);
+  // ננקה רווחים מיותרים
+  return rows.map(r=> r.map(c=> String(c??'').trim()));
+}
+
+function csvToHtmlTable(text){
+  const rows = parseCSV(text).filter(r=> r.some(c=> (c||'').trim() !== ''));
+  if(!rows.length) return '<table></table>';
+  const head = rows[0];
+  const body = rows.slice(1);
+  const esc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let html = '<table><thead><tr>';
+  head.forEach(h=> html += `<th>${esc(h)}</th>`);
+  html += '</tr></thead><tbody>';
+  body.forEach(r=>{
+    html += '<tr>' + r.map(c=> `<td>${esc(c)}</td>`).join('') + '</tr>';
+  });
+  html += '</tbody></table>';
+  return html;
+}
+/* END NEW */
+
 function findBestHeaderIndex(headers, wanted, {exclude=[]}={}){
   const H = headers.map(h => h.replace(/\s+/g,' ').trim().toLowerCase());
   const isBad = i => exclude.some(x => H[i].includes(x));
@@ -145,8 +190,10 @@ function findBestHeaderIndex(headers, wanted, {exclude=[]}={}){
 
 async function readFile(){
   const f = $('#fileInput').files?.[0]; if(!f) return null;
-  const html = await f.text();
+  const raw = await f.text();                         // NEW: תמיד טקסט
+  const html = isProbablyHTML(raw) ? raw : csvToHtmlTable(raw);  // NEW: CSV → HTML table
   const doc  = new DOMParser().parseFromString(html,'text/html');
+
   const tables = Array.from(doc.querySelectorAll('table')).sort((a,b)=>b.rows.length-a.rows.length);
   const t = tables[0]; if(!t) return null;
 
