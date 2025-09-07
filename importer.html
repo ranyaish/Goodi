@@ -43,6 +43,7 @@ button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
 table{width:100%;border-collapse:collapse}
 th,td{padding:8px;border-bottom:1px solid var(--line);text-align:right}
 thead th{position:sticky;top:64px;background:#fff}
+small.hint{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -62,6 +63,7 @@ thead th{position:sticky;top:64px;background:#fff}
       </div>
     </div>
     <div id="authMsg" class="muted" style="margin-top:8px">לא מחובר</div>
+    <small class="hint">* ודא שפוליסות RLS מאפשרות ל־<code>authenticated</code> כתיבה ל־<code>customers</code> ו־<code>coupons</code>.</small>
   </div>
 
   <!-- אזור עבודה – מוצג רק לאחר התחברות -->
@@ -103,7 +105,7 @@ let supabase=null, currentUser=null, balancesCache=[];
 document.addEventListener('supabase-ready', boot);
 
 function ensureClient(){
-  if(!window.supabase){ document.getElementById('authMsg').textContent='ספריית Supabase לא נטענה'; document.getElementById('authMsg').className='bad'; return null; }
+  if(!window.supabase){ setMsg('ספריית Supabase לא נטענה','bad'); return null; }
   if(!supabase){
     supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
       auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true }
@@ -112,19 +114,19 @@ function ensureClient(){
   return supabase;
 }
 function setAuthUI(on,email){
-  const msg=document.getElementById('authMsg');
-  msg.textContent = on ? `מחובר כ-${email||''}` : 'לא מחובר';
-  msg.className   = on ? 'ok' : 'muted';
+  setMsg(on ? `מחובר כ-${email||''}` : 'לא מחובר', on?'ok':'muted');
   document.getElementById('logoutBtn').classList.toggle('hidden', !on);
   document.getElementById('loginBtn').classList.toggle('hidden',  on);
   document.getElementById('app').classList.toggle('hidden', !on);
 }
+function setMsg(text,cls){ const el=document.getElementById('authMsg'); el.textContent=text; el.className=cls||'muted'; }
 
 async function boot(){
   if(!ensureClient()) return;
 
   document.getElementById('loginBtn').onclick = async ()=>{
     try{
+      setMsg('מתחבר…','muted');
       const email=document.getElementById('email').value.trim();
       const password=document.getElementById('password').value;
       const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -134,7 +136,7 @@ async function boot(){
       setAuthUI(!!currentUser, currentUser?.email);
       if(currentUser) refreshBalances();
     }catch(e){
-      document.getElementById('authMsg').textContent='שגיאה: '+(e.message||e); document.getElementById('authMsg').className='bad';
+      setMsg('שגיאה: '+(e.message||e),'bad');
     }
   };
 
@@ -160,7 +162,7 @@ function normDateToISO(s){
   if(!s) return '';
   s=s.replace(/[\.]/g,'/').replace(/\s+/g,' ').trim();
   let m=s.match(/(\d{1,2})[\/](\d{1,2})[\/](\d{2,4})/);
-  if(m){let[d,mn,y]=[m[1],m[2],m[3]]; if(y.length===2) y='20'+y; return `${y.padStart(4,'0')}-${mn.padStart(2,'0')}-${d.padStart(2,'0')}`;}
+  if(m){let[d,mn,y]=[m[1],m[2],m[3]]; if(y.length===2) y='20'+y; return `${y.padStart(2,'0')}-${mn.padStart(2,'0')}-${d.padStart(2,'0')}`;}
   m=s.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
   if(m){let[y,mn,d]=[m[1],m[2],m[3]]; return `${y.padStart(4,'0')}-${mn.padStart(2,'0')}-${d.padStart(2,'0')}`;}
   return s;
@@ -247,9 +249,9 @@ async function readFile(){
 
 /* ===== תצוגה מקדימה ===== */
 document.getElementById('btnPreview').onclick = async ()=>{
-  if(!currentUser){ document.getElementById('importStatus').textContent='יש להתחבר קודם'; document.getElementById('importStatus').className='bad'; return; }
+  if(!currentUser){ setImportStatus('יש להתחבר קודם','bad'); return; }
   const info = await readFile();
-  if(!info){ document.getElementById('importStatus').textContent='קובץ/טבלה לא תקינים'; document.getElementById('importStatus').className='bad'; return; }
+  if(!info){ setImportStatus('קובץ/טבלה לא תקינים','bad'); return; }
 
   const map=new Map();
   for(const r of pickedRows){
@@ -263,16 +265,18 @@ document.getElementById('btnPreview').onclick = async ()=>{
   sample.forEach(r=> html+=`<tr><td>${isoToDDMMYYYY(r.date)}</td><td>${r.name}</td><td>${fmtILS(r.amount)}</td></tr>`);
   html+='</tbody></table></div>';
   document.getElementById('preview').innerHTML=html;
-  document.getElementById('importStatus').textContent='';
+  setImportStatus('', 'muted');
 };
+
+function setImportStatus(text, cls){ const el=document.getElementById('importStatus'); el.textContent=text; el.className=cls||'muted'; }
 
 /* ===== ייבוא ל-DB ===== */
 document.getElementById('btnImport').onclick = async ()=>{
   try{
-    if(!currentUser){ document.getElementById('importStatus').textContent='יש להתחבר קודם'; document.getElementById('importStatus').className='bad'; return; }
+    if(!currentUser){ setImportStatus('יש להתחבר קודם','bad'); return; }
     const info = await readFile();
-    if(!info){ document.getElementById('importStatus').textContent='קובץ/טבלה לא תקינים'; document.getElementById('importStatus').className='bad'; return; }
-    document.getElementById('importStatus').textContent='מייבא…'; document.getElementById('importStatus').className='muted';
+    if(!info){ setImportStatus('קובץ/טבלה לא תקינים','bad'); return; }
+    setImportStatus('מייבא…','muted');
 
     // איחוד כפילויות (שם+תאריך)
     const uniq=new Map();
@@ -281,44 +285,62 @@ document.getElementById('btnImport').onclick = async ()=>{
       if(!uniq.has(k)) uniq.set(k,{...r}); else uniq.get(k).amount+=Number(r.amount||0);
     }
     const rowsForImport=[...uniq.values()];
-    if(!rowsForImport.length){ document.getElementById('importStatus').textContent='אין רשומות חוקיות לייבוא'; document.getElementById('importStatus').className='bad'; return; }
+    if(!rowsForImport.length){ setImportStatus('אין רשומות חוקיות לייבוא','bad'); return; }
 
-    // upsert לקוחות (ללא עדכון קיימות)
+    /* ---- שלב לקוחות: upsert (ללא עדכון קיימות) + מדדים ---- */
     const uniqueNames = [...new Set(rowsForImport.map(x=>x.name))];
-    const { error:cErr } = await supabase.from('customers').upsert(
-      uniqueNames.map(n=>({ name:n })),
-      { onConflict:'name', ignoreDuplicates:true }
-    );
-    if(cErr) throw cErr;
+    let customersInserted = 0, customersSkipped = 0;
+    {
+      const { data:customersRet, error:cErr } = await supabase
+        .from('customers')
+        .upsert(
+          uniqueNames.map(n=>({ name:n })),
+          { onConflict:'name', ignoreDuplicates:true }
+        )
+        .select('customer_id'); // יחזיר רק שורות שנוצרו בפועל
+      if(cErr) throw cErr;
+      customersInserted = Array.isArray(customersRet) ? customersRet.length : 0;
+      customersSkipped  = uniqueNames.length - customersInserted;
+    }
 
-    // שליפת ids
+    // שליפת ids לשלב השוברים
     const { data:cust, error:gErr } = await supabase.from('customers')
       .select('customer_id,name').in('name', uniqueNames);
     if(gErr) throw gErr;
     const idByName = Object.fromEntries((cust||[]).map(c=>[c.name, c.customer_id]));
 
-    // בניית שוברים
+    /* ---- שלב שוברים: upsert בחלקים + מדדים ---- */
     const coupons = rowsForImport
       .map(x=>({ customer_id:idByName[x.name], date:x.date, amount:x.amount, redeemed:false, source_label:'upload' }))
       .filter(x=>x.customer_id);
 
-    // upsert חלקי (על customer_id+date), ללא עדכון קיימות
     const CHUNK=500;
+    let couponsInserted=0;
     for(let i=0;i<coupons.length;i+=CHUNK){
       const slice=coupons.slice(i,i+CHUNK);
-      const { error:uErr } = await supabase.from('coupons').upsert(
-        slice,
-        { onConflict:'customer_id,date', ignoreDuplicates:true }
-      );
+      const { data:ret, error:uErr } = await supabase
+        .from('coupons')
+        .upsert(
+          slice,
+          { onConflict:'customer_id,date', ignoreDuplicates:true }
+        )
+        .select('id'); // יחזיר רק את הפריטים שנכנסו בפועל
       if(uErr) throw uErr;
+      couponsInserted += Array.isArray(ret) ? ret.length : 0;
     }
+    const couponsTotal   = coupons.length;
+    const couponsSkipped = couponsTotal - couponsInserted;
 
-    document.getElementById('importStatus').textContent=`הייבוא הושלם. נרשמו/דלגו ${coupons.length} רשומות.`; 
-    document.getElementById('importStatus').className='ok';
+    setImportStatus(
+      `✅ הייבוא הושלם.
+לקוחות — נוספו ${customersInserted} | דולגו ${customersSkipped} (סה״כ ${uniqueNames.length}).
+שוברים — נוספו ${couponsInserted} | דולגו ${couponsSkipped} (סה״כ ${couponsTotal}).`,
+      'ok'
+    );
+
     refreshBalances();
   }catch(e){
-    document.getElementById('importStatus').textContent='שגיאה: '+(e.message||e);
-    document.getElementById('importStatus').className='bad';
+    setImportStatus('שגיאה: '+(e.message||e),'bad');
   }
 };
 
